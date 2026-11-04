@@ -66,6 +66,28 @@ jobhunter scrape -k "关键词"  # 采集岗位
 jobhunter score / greet / confirm / send / monitor / status
 ```
 
+## Ubuntu 长期运行部署
+
+适合把项目放在一台常开的 Linux 机器（如合盖的笔记本/NAS）上长期运行,日常工作机通过 Tailscale 访问面板:
+
+```bash
+# 1. 安装(Node 22+ 必装;国内走 npmmirror:https://npmmirror.com/mirrors/node/ 下载解压到 /opt 并链接 /usr/local/bin/node)
+# 2. 拉代码 + 建虚拟环境 + 构建前端(见「快速开始」,pip 用清华镜像)
+# 3. 面板系统服务
+mkdir -p ~/.config/systemd/user
+cp scripts/linux/jobhunter-panel.service ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now jobhunter-panel
+# 4. Chrome 调试实例随图形会话自启(首次登录招聘平台用)
+mkdir -p ~/.config/autostart
+cp scripts/linux/jobhunter-chrome.desktop ~/.config/autostart/
+# 5. 远程访问:Ubuntu 需装 socat;本机浏览器打开
+#    http://127.0.0.1:8686(本机)/ http://<tailscale-ip>:8686(远程,需先跑一次 start_jobhunter_pro.sh 建立转发)
+bash scripts/linux/start_jobhunter_pro.sh
+```
+
+- 面板无登录鉴权(设计为仅本机),远程访问只转发到 Tailscale 地址,不暴露到局域网/公网
+- 日志:`journalctl --user -u jobhunter-panel -f`、`/tmp/jobhunter_pro-panel.log`、`/tmp/jobhunter_pro-start.log`
+
 ## 隐私与安全
 
 - 你的简历、数据库(`data/`)、录音、生成文件、`config.yaml`(含 API Key 配置)全部在本地,均已被 .gitignore 排除,**永远不会进入 git 仓库**

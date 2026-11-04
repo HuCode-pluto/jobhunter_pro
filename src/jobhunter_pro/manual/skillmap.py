@@ -17,7 +17,7 @@ def build(conn: sqlite3.Connection, role_name: str, output_dir: Path, top: int =
         return None
 
     job_count = conn.execute(
-        "SELECT COUNT(*) FROM manual_jobs WHERE role_type = ?", (role_name,)
+        "SELECT COUNT(*) FROM jobs WHERE role_type = ?", (role_name,)
     ).fetchone()[0]
 
     # 按分类分组

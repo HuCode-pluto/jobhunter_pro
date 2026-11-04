@@ -180,8 +180,9 @@ def export_base_resume(resume: dict, output_dir: Path) -> Path:
     return render_pdf(resume_to_html(resume), out)
 
 
-def export_tailored_resume(job_id: int, markdown: str, output_dir: Path) -> Path:
-    out = output_dir / f"{job_id:04d}" / "定制简历.pdf"
+def export_tailored_resume(job_id: str, markdown: str, output_dir: Path) -> Path:
+    safe_id = "".join(c for c in str(job_id) if c.isalnum() or c in "-_")[:40] or "job"
+    out = output_dir / safe_id / "定制简历.pdf"
     out.parent.mkdir(parents=True, exist_ok=True)
     return render_pdf(
         f"<html><head><meta charset='utf-8'><style>{CSS}</style></head>"

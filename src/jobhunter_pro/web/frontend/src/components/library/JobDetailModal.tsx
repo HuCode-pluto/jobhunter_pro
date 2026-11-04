@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { copyToClipboard } from '@/lib/clipboard'
+import { getStatusLabel } from '@/lib/status'
 import {
   APPLICATION_STATUS_LABELS,
   LIBRARY_JOB_STATUSES,
@@ -53,25 +54,30 @@ interface LibraryApplication {
 }
 
 export interface LibraryJobDetail {
-  id: number
-  role_type: string
-  source: string
-  url: string
-  company: string
+  id: string
   title: string
+  company: string
+  salary: string
   city: string
+  experience: string
+  education: string
+  url: string
+  jd: string
+  jd_json: LibraryJdJson
+  score: number
+  score_reason: string
+  greeting: string
+  status: string
+  source_platform: string
+  role_type: string
   salary_min: number | null
   salary_max: number | null
   salary_note: string
   years_required: string
   education_required: string
-  jd_raw: string
-  jd_json: LibraryJdJson
   red_flags: string
-  match_score: number | null
   missing_skills: string[]
   reject_reason: string
-  status: string
   created_at: string
   updated_at: string
   application: LibraryApplication | null
@@ -82,7 +88,7 @@ export interface LibraryJobDetail {
 
 interface JobDetailModalProps {
   open: boolean
-  jobId: number | null
+  jobId: string | null
   onClose: () => void
   onChanged?: () => void
 }
@@ -111,6 +117,10 @@ const JOB_STATUS_HINTS: Record<string, string> = {
 
 function isHttpUrl(value: string | null | undefined): boolean {
   return Boolean(value && /^https?:\/\//i.test(value))
+}
+
+function isManualDetail(job: LibraryJobDetail | null): boolean {
+  return job?.source_platform === 'manual'
 }
 
 function formatSalary(min: number | null | undefined, max: number | null | undefined, note?: string): string {
@@ -528,7 +538,7 @@ export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailMod
       <div>
         <p className="text-xs font-semibold text-muted">JD 原文</p>
         <div className="mt-1.5 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-card-border bg-surface p-3 text-xs leading-6 text-foreground">
-          {job?.jd_raw || '（该岗位没有 JD 原文）'}
+          {job?.jd || '（该岗位没有 JD 原文）'}
         </div>
       </div>
       <div className="rounded-lg border border-card-border bg-surface p-3">
@@ -618,23 +628,32 @@ export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailMod
       )}
       <div className="rounded-lg border border-card-border bg-surface p-3">
         <p className="text-xs font-semibold text-foreground">岗位状态</p>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Select
-            value={jobStatus}
-            onChange={(e) => void changeJobStatus(e.target.value)}
-            disabled={busy !== null}
-            className="w-40"
-            aria-label="岗位状态"
-          >
-            {LIBRARY_JOB_STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {LIBRARY_JOB_STATUS_LABELS[status]}
-              </option>
-            ))}
-          </Select>
-          {busy === 'job-status' && <Loader2 className="h-4 w-4 animate-spin text-muted" />}
-        </div>
-        <p className="mt-2 text-[11px] leading-5 text-muted">{JOB_STATUS_HINTS[jobStatus] ?? ''}</p>
+        {!isManualDetail(job) && (
+          <p className="mt-1 text-[11px] leading-5 text-muted">
+            采集岗位的状态(评分/打招呼/发送/回收)请在「工作台」管理；这里可维护投递台账与面试准备。
+          </p>
+        )}
+        {isManualDetail(job) && (
+          <>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Select
+                value={jobStatus}
+                onChange={(e) => void changeJobStatus(e.target.value)}
+                disabled={busy !== null}
+                className="w-40"
+                aria-label="岗位状态"
+              >
+                {LIBRARY_JOB_STATUSES.map((status) => (
+                  <option key={status} value={status}>
+                    {LIBRARY_JOB_STATUS_LABELS[status]}
+                  </option>
+                ))}
+              </Select>
+              {busy === 'job-status' && <Loader2 className="h-4 w-4 animate-spin text-muted" />}
+            </div>
+            <p className="mt-2 text-[11px] leading-5 text-muted">{JOB_STATUS_HINTS[jobStatus] ?? ''}</p>
+          </>
+        )}
       </div>
     </div>
   )
@@ -683,10 +702,14 @@ export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailMod
                     <span
                       className={cn(
                         'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold',
-                        libraryStatusClass(job.status),
+                        isManualDetail(job)
+                          ? libraryStatusClass(job.status)
+                          : 'border-card-border bg-surface-muted text-muted',
                       )}
                     >
-                      {LIBRARY_JOB_STATUS_LABELS[job.status] ?? job.status}
+                      {isManualDetail(job)
+                        ? LIBRARY_JOB_STATUS_LABELS[job.status] ?? job.status
+                        : getStatusLabel(job.status)}
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-muted">
@@ -708,13 +731,13 @@ export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailMod
                   <div className="text-right">
                     <div className="text-[11px] text-muted">薪资</div>
                     <div className="mt-0.5 text-sm font-bold text-foreground">
-                      {formatSalary(job.salary_min, job.salary_max, job.salary_note)}
+                      {job.salary || formatSalary(job.salary_min, job.salary_max, job.salary_note)}
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="text-[11px] text-muted">匹配评分</div>
-                    <div className={cn('mt-0.5 text-xl font-black leading-none', scoreClass(job.match_score))}>
-                      {job.match_score == null ? '—' : Math.round(job.match_score)}
+                    <div className={cn('mt-0.5 text-xl font-black leading-none', scoreClass(job.score))}>
+                      {job.score == null || job.score === 0 ? '—' : job.score}
                     </div>
                   </div>
                 </div>
@@ -829,9 +852,9 @@ export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailMod
                   label: '打招呼语',
                   content: (
                     <MaterialView
-                      text={job.greeting_file}
+                      text={job.greeting_file || job.greeting}
                       copied={copiedKey === 'greeting'}
-                      onCopy={() => void copyText('greeting', job.greeting_file)}
+                      onCopy={() => void copyText('greeting', job.greeting_file || job.greeting)}
                     />
                   ),
                 },

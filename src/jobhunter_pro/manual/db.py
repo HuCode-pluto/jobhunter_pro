@@ -23,24 +23,55 @@ def seed_manual_materials(conn: sqlite3.Connection) -> int:
     return after - before
 
 
-# ---------- 岗位 ----------
+# ---------- 岗位(并入采集侧 jobs 表，source_platform='manual' 为手动岗位) ----------
 
-def insert_manual_job(conn: sqlite3.Connection, fields: dict) -> int:
-    cols = ", ".join(fields.keys())
-    marks = ", ".join("?" * len(fields))
-    cur = conn.execute(
-        f"INSERT INTO manual_jobs ({cols}) VALUES ({marks})", list(fields.values())
-    )
+LIBRARY_JOB_FIELDS = (
+    "id", "title", "company", "salary", "city", "experience", "education",
+    "recruitment_type", "jd", "hr_name", "hr_title", "hr_active",
+    "company_size", "company_industry", "url", "score", "score_reason",
+    "greeting", "status", "source_platform", "source_job_id", "source_keyword",
+    "source_city_code", "role_type", "jd_json", "red_flags", "missing_skills",
+    "reject_reason", "salary_note", "years_required", "education_required",
+    "salary_min", "salary_max",
+)
+
+
+def insert_library_job(conn: sqlite3.Connection, fields: dict) -> str:
+    """把手动解析的岗位写入 jobs 表(来源 manual)，返回 job_id(TEXT)。"""
+    from uuid import uuid4
+
+    job_id = str(fields.get("id") or f"manual-{uuid4().hex[:12]}")
+    values = {"id": job_id}
+    for key in LIBRARY_JOB_FIELDS:
+        if key == "id":
+            continue
+        if key in fields:
+            values[key] = fields[key]
+    cols = ", ".join(values.keys())
+    marks = ", ".join("?" * len(values))
+    conn.execute(f"INSERT OR IGNORE INTO jobs ({cols}) VALUES ({marks})", list(values.values()))
     conn.commit()
-    return cur.lastrowid
+    return job_id
 
 
-def get_manual_job(conn: sqlite3.Connection, job_id: int):
-    return conn.execute("SELECT * FROM manual_jobs WHERE id = ?", (job_id,)).fetchone()
+def get_library_job(conn: sqlite3.Connection, job_id: str):
+    return conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
 
 
-def list_manual_jobs(conn: sqlite3.Connection, role=None, status=None, min_score=None, limit=100):
-    sql, args = "SELECT * FROM manual_jobs WHERE 1=1", []
+def list_library_jobs(
+    conn: sqlite3.Connection,
+    source=None, role=None, status=None, min_score=None, keyword=None, limit=100,
+):
+    """统一岗位库列表：手动 + 采集岗位合并视图。
+
+    source: 'manual'(手动粘贴)/'collected'(平台采集)/None(全部)；
+    keyword 匹配标题/公司；status 只过滤手动流水线状态。
+    """
+    sql, args = "SELECT * FROM jobs WHERE 1=1", []
+    if source == "manual":
+        sql += " AND source_platform = 'manual'"
+    elif source == "collected":
+        sql += " AND (source_platform IS NULL OR source_platform != 'manual')"
     if role:
         sql += " AND role_type = ?"
         args.append(role)
@@ -48,27 +79,28 @@ def list_manual_jobs(conn: sqlite3.Connection, role=None, status=None, min_score
         sql += " AND status = ?"
         args.append(status)
     if min_score is not None:
-        sql += " AND match_score >= ?"
+        sql += " AND score >= ?"
         args.append(min_score)
-    sql += " ORDER BY COALESCE(match_score, 0) DESC, id DESC LIMIT ?"
+    if keyword:
+        sql += " AND (title LIKE ? OR company LIKE ?)"
+        args += [f"%{keyword}%", f"%{keyword}%"]
+    sql += " ORDER BY COALESCE(score, 0) DESC, created_at DESC LIMIT ?"
     args.append(limit)
     return conn.execute(sql, args).fetchall()
 
 
-def update_manual_job(conn: sqlite3.Connection, job_id: int, **fields):
+def update_library_job(conn: sqlite3.Connection, job_id: str, **fields):
     sets = ", ".join(f"{k} = ?" for k in fields)
     sets += ", updated_at = CURRENT_TIMESTAMP"
-    conn.execute(
-        f"UPDATE manual_jobs SET {sets} WHERE id = ?", [*fields.values(), job_id]
-    )
+    conn.execute(f"UPDATE jobs SET {sets} WHERE id = ?", [*fields.values(), job_id])
     conn.commit()
 
 
-# ---------- 投递台账 ----------
+# ---------- 投递台账(applications，TEXT job_id) ----------
 
-def add_manual_application(conn: sqlite3.Connection, job_id: int, files: dict, note="") -> int:
+def add_library_application(conn: sqlite3.Connection, job_id: str, files: dict, note="") -> int:
     cur = conn.execute(
-        "INSERT INTO manual_applications (job_id, resume_file, greeting_file, cover_letter_file, notes) "
+        "INSERT INTO applications (job_id, resume_file, greeting_file, cover_letter_file, notes) "
         "VALUES (?, ?, ?, ?, ?)",
         (
             job_id,
@@ -82,16 +114,16 @@ def add_manual_application(conn: sqlite3.Connection, job_id: int, files: dict, n
     return cur.lastrowid
 
 
-def get_manual_application(conn: sqlite3.Connection, job_id: int):
+def get_library_application(conn: sqlite3.Connection, job_id: str):
     return conn.execute(
-        "SELECT * FROM manual_applications WHERE job_id = ? ORDER BY id DESC LIMIT 1",
+        "SELECT * FROM applications WHERE job_id = ? ORDER BY id DESC LIMIT 1",
         (job_id,),
     ).fetchone()
 
 
-def update_manual_application(conn: sqlite3.Connection, job_id: int, status: str, note=""):
+def update_library_application(conn: sqlite3.Connection, job_id: str, status: str, note=""):
     conn.execute(
-        "UPDATE manual_applications SET status = ?, notes = CASE WHEN ? != '' THEN ? ELSE notes END, "
+        "UPDATE applications SET status = ?, notes = CASE WHEN ? != '' THEN ? ELSE notes END, "
         "submitted_at = CASE WHEN ? = 'submitted' THEN CURRENT_TIMESTAMP ELSE submitted_at END "
         "WHERE job_id = ?",
         (status, note, note, status, job_id),
@@ -99,9 +131,9 @@ def update_manual_application(conn: sqlite3.Connection, job_id: int, status: str
     conn.commit()
 
 
-def update_manual_application_note(conn: sqlite3.Connection, job_id: int, note: str):
-    """只追加备注，不改状态（避免把 submitted 误改回 drafted）。"""
-    conn.execute("UPDATE manual_applications SET notes = ? WHERE job_id = ?", (note, job_id))
+def update_library_application_note(conn: sqlite3.Connection, job_id: str, note: str):
+    """只追加备注，不改状态(避免把 submitted 误改回 drafted)。"""
+    conn.execute("UPDATE applications SET notes = ? WHERE job_id = ?", (note, job_id))
     conn.commit()
 
 
@@ -186,7 +218,7 @@ def rebuild_manual_question_bank(conn: sqlite3.Connection):
         " ORDER BY q2.id DESC LIMIT 1) AS ref_answer "
         "FROM manual_interview_questions q "
         "LEFT JOIN manual_interviews i ON i.id = q.interview_id "
-        "LEFT JOIN manual_jobs j ON j.id = i.job_id "
+        "LEFT JOIN jobs j ON j.id = i.job_id "
         "GROUP BY q.question, COALESCE(j.role_type, '')"
     ).fetchall()
     conn.execute("DELETE FROM manual_question_bank WHERE source != 'prep'")

@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '工作台' },
-  { to: '/jobs', icon: BriefcaseBusiness, label: '岗位池' },
   { to: '/monitor', icon: Radar, label: '监测执行' },
   { to: '/library', icon: BookOpenText, label: '岗位库' },
   { to: '/interviews', icon: Mic, label: '面试复盘' },

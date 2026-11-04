@@ -18,30 +18,32 @@ import {
   LIBRARY_JOB_STATUS_LABELS,
   libraryStatusClass,
 } from '@/lib/libraryStatus'
+import { getStatusLabel } from '@/lib/status'
 import { cn } from '@/lib/utils'
 
 export interface LibraryJob {
-  id: number
-  role_type: string
-  source: string
-  url: string
-  company: string
+  id: string
   title: string
+  company: string
+  salary: string
   city: string
+  experience: string
+  education: string
+  jd: string
+  jd_json: string
+  url: string
+  score: number
+  score_reason: string
+  greeting: string
+  status: string
+  source_platform: string
+  source_keyword: string
+  role_type: string
   salary_min: number | null
   salary_max: number | null
   salary_note: string
-  years_required: string
-  education_required: string
-  jd_raw: string
-  jd_json: string
-  red_flags: string
-  match_score: number | null
-  missing_skills: string
   reject_reason: string
-  status: string
   created_at: string
-  updated_at: string
 }
 
 type Feedback = { type: 'success' | 'error'; text: string }
@@ -69,6 +71,20 @@ function formatSalary(
   return [range, note].filter(Boolean).join(' · ') || '面议'
 }
 
+function isManualJob(job: LibraryJob): boolean {
+  return job.source_platform === 'manual'
+}
+
+function sourceLabel(job: LibraryJob): string {
+  if (isManualJob(job)) return '手动'
+  return `采集·${job.source_platform || '平台'}`
+}
+
+function jobStatusLabel(job: LibraryJob): string {
+  if (isManualJob(job)) return LIBRARY_JOB_STATUS_LABELS[job.status] ?? job.status
+  return getStatusLabel(job.status)
+}
+
 function scoreClass(score: number | null | undefined): string {
   if (score == null) return 'text-muted'
   if (score >= 80) return 'text-success'
@@ -79,16 +95,18 @@ function scoreClass(score: number | null | undefined): string {
 export default function LibraryPage() {
   const [role, setRole] = useState('')
   const [status, setStatus] = useState('')
+  const [source, setSource] = useState('')
+  const [keyword, setKeyword] = useState('')
   const [minScore, setMinScore] = useState('')
   const [jobs, setJobs] = useState<LibraryJob[]>([])
-  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
   const [feedback, setFeedback] = useState<Feedback | null>(null)
   const [resumeMissing, setResumeMissing] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
-  const [detailJobId, setDetailJobId] = useState<number | null>(null)
-  const [processingIds, setProcessingIds] = useState<number[]>([])
+  const [detailJobId, setDetailJobId] = useState<string | null>(null)
+  const [processingIds, setProcessingIds] = useState<string[]>([])
   const [batchProcessing, setBatchProcessing] = useState(false)
   const feedbackTimer = useRef<number | null>(null)
   const requestRevision = useRef(0)
@@ -116,6 +134,8 @@ export default function LibraryPage() {
     const params = new URLSearchParams()
     if (role.trim()) params.set('role', role.trim())
     if (status) params.set('status', status)
+    if (source) params.set('source', source)
+    if (keyword.trim()) params.set('keyword', keyword.trim())
     if (minScore.trim()) {
       const parsed = Number(minScore)
       if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) {
@@ -198,8 +218,8 @@ export default function LibraryPage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || '批量处理失败')
-      const results: Array<{ id?: number; error?: string }> = Array.isArray(data.results)
-        ? (data.results as Array<{ id?: number; error?: string }>)
+      const results: Array<{ id?: string; error?: string }> = Array.isArray(data.results)
+        ? (data.results as Array<{ id?: string; error?: string }>)
         : []
       const failedCount = results.filter((item) => item.error).length
       const okCount =
@@ -217,7 +237,7 @@ export default function LibraryPage() {
     }
   }
 
-  const toggleSelected = (id: number) => {
+  const toggleSelected = (id: string) => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     )
@@ -236,7 +256,7 @@ export default function LibraryPage() {
       <div>
         <h1 className="text-xl font-black text-foreground">岗位库</h1>
         <p className="mt-1 text-xs text-muted">
-          粘贴 JD、截图或链接入库，AI 完成解析评分与投递材料定制。
+          手动粘贴与平台采集的岗位统一管理：AI 解析评分、投递材料定制、面试准备与台账。
         </p>
       </div>
 
@@ -248,6 +268,26 @@ export default function LibraryPage() {
 
       <Card>
         <CardContent className="flex flex-wrap items-center gap-2 p-3">
+          <Select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="w-32"
+            aria-label="来源筛选"
+          >
+            <option value="">全部来源</option>
+            <option value="manual">手动粘贴</option>
+            <option value="collected">平台采集</option>
+          </Select>
+          <Input
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') refresh()
+            }}
+            placeholder="标题/公司关键词"
+            className="w-40"
+            aria-label="关键词筛选"
+          />
           <Input
             value={role}
             onChange={(e) => setRole(e.target.value)}
@@ -255,7 +295,7 @@ export default function LibraryPage() {
               if (e.key === 'Enter') refresh()
             }}
             placeholder="方向筛选，如：运维工程师"
-            className="w-48"
+            className="w-44"
             aria-label="方向筛选"
           />
           <Select
@@ -357,6 +397,7 @@ export default function LibraryPage() {
                   <th className="px-3 py-3 text-left font-bold">公司</th>
                   <th className="px-3 py-3 text-left font-bold">城市</th>
                   <th className="px-3 py-3 text-left font-bold">薪资</th>
+                  <th className="px-3 py-3 text-left font-bold">来源</th>
                   <th className="px-3 py-3 text-left font-bold">方向</th>
                   <th className="px-3 py-3 text-left font-bold">评分</th>
                   <th className="px-3 py-3 text-left font-bold">状态</th>
@@ -366,7 +407,7 @@ export default function LibraryPage() {
               <tbody>
                 {loading && jobs.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="px-4 py-16">
+                    <td colSpan={10} className="px-4 py-16">
                       <div className="flex items-center justify-center gap-2 text-sm text-muted">
                         <Loader2 className="h-5 w-5 animate-spin" />
                         正在读取岗位库…
@@ -438,7 +479,19 @@ export default function LibraryPage() {
                         {job.city || '—'}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3 text-xs text-foreground">
-                        {formatSalary(job.salary_min, job.salary_max, job.salary_note)}
+                        {job.salary || formatSalary(job.salary_min, job.salary_max, job.salary_note)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+                            isManualJob(job)
+                              ? 'border-cyan-border bg-cyan-soft text-cyan'
+                              : 'border-card-border bg-surface-muted text-muted',
+                          )}
+                        >
+                          {sourceLabel(job)}
+                        </span>
                       </td>
                       <td className="px-3 py-3">
                         <span className="inline-flex whitespace-nowrap rounded-full bg-secondary px-2 py-0.5 text-[11px] font-semibold text-foreground">
@@ -446,18 +499,20 @@ export default function LibraryPage() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-3 py-3">
-                        <span className={cn('text-base font-black', scoreClass(job.match_score))}>
-                          {job.match_score == null ? '—' : Math.round(job.match_score)}
+                        <span className={cn('text-base font-black', scoreClass(job.score))}>
+                          {job.score == null || job.score === 0 ? '—' : job.score}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-3 py-3">
                         <span
                           className={cn(
                             'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold',
-                            libraryStatusClass(job.status),
+                            isManualJob(job)
+                              ? libraryStatusClass(job.status)
+                              : 'border-card-border bg-surface-muted text-muted',
                           )}
                         >
-                          {LIBRARY_JOB_STATUS_LABELS[job.status] ?? job.status}
+                          {jobStatusLabel(job)}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-3 py-3">

@@ -26,9 +26,13 @@ def tailor(llm, resume: dict, jd_json: dict) -> dict:
     return llm.chat_json(TAILOR_PROMPT, user, temperature=0.4)
 
 
-def save_outputs(job_id: int, job_title: str, result: dict, output_dir) -> dict:
-    """把定制内容写入 data/output/<job_id>/，返回文件路径映射。"""
-    job_dir = output_dir / f"{job_id:04d}"
+def save_outputs(job_id: str, job_title: str, result: dict, output_dir) -> dict:
+    """把定制内容写入 data/output/<job_id>/，返回文件路径映射。
+
+    job_id 为岗位库统一 TEXT id(手动岗位为 manual-xxxx)；目录名做文件名安全处理。
+    """
+    safe_id = "".join(c for c in str(job_id) if c.isalnum() or c in "-_")[:40] or "job"
+    job_dir = output_dir / safe_id
     job_dir.mkdir(parents=True, exist_ok=True)
     files = {
         "greeting": job_dir / "打招呼语.md",

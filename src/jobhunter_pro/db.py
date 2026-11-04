@@ -177,47 +177,42 @@ def _init_tables(conn: sqlite3.Connection) -> None:
     _init_collection_runs(conn)
     _init_collect_progress(conn)
     _init_score_traces(conn)
+    _migrate_library_columns(conn)
     _init_manual_tables(conn)
 
 
-def _init_manual_tables(conn: sqlite3.Connection) -> None:
-    """手动流水线（岗位库/面试/题库/技能地图）的表，统一 manual_ 前缀。
+def _migrate_library_columns(conn: sqlite3.Connection) -> None:
+    """岗位库融合：为采集侧 jobs 表补齐手动流水线列(角色分类/JD解析/红线/短板)。"""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    additions = [
+        ("role_type", "TEXT DEFAULT ''"),
+        ("jd_json", "TEXT DEFAULT ''"),
+        ("red_flags", "TEXT DEFAULT ''"),
+        ("missing_skills", "TEXT DEFAULT ''"),
+        ("reject_reason", "TEXT DEFAULT ''"),
+        ("salary_note", "TEXT DEFAULT ''"),
+        ("years_required", "TEXT DEFAULT ''"),
+        ("education_required", "TEXT DEFAULT ''"),
+        ("salary_min", "REAL"),
+        ("salary_max", "REAL"),
+    ]
+    for name, ddl in additions:
+        if name not in cols:
+            conn.execute(f"ALTER TABLE jobs ADD COLUMN {name} {ddl}")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_role_type ON jobs(role_type)")
+    conn.commit()
 
-    时间戳用 CURRENT_TIMESTAMP（UTC）与 house 约定一致。学习资料种子库在
-    表为空时自动播种（包内 data/seed_materials*.sql）。
+
+def _init_manual_tables(conn: sqlite3.Connection) -> None:
+    """手动流水线的辅助表(面试/题库/技能/资料/台账)，统一 manual_ 前缀。
+
+    岗位本体已并入采集侧 jobs 表(来源用 source_platform 区分，manual=手动粘贴)；
+    投递台账 applications 用 TEXT job_id 关联 jobs.id。学习资料种子库表空自动播种。
     """
     conn.executescript("""
-        CREATE TABLE IF NOT EXISTS manual_jobs (
+        CREATE TABLE IF NOT EXISTS applications (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            role_type TEXT NOT NULL DEFAULT '',
-            source TEXT NOT NULL DEFAULT 'manual',
-            url TEXT DEFAULT '',
-            company TEXT DEFAULT '',
-            title TEXT DEFAULT '',
-            city TEXT DEFAULT '',
-            salary_min REAL,
-            salary_max REAL,
-            salary_note TEXT DEFAULT '',
-            years_required TEXT DEFAULT '',
-            education_required TEXT DEFAULT '',
-            jd_raw TEXT DEFAULT '',
-            jd_json TEXT DEFAULT '',
-            jd_loaded INTEGER NOT NULL DEFAULT 1,
-            red_flags TEXT DEFAULT '',
-            match_score REAL,
-            missing_skills TEXT DEFAULT '',
-            reject_reason TEXT DEFAULT '',
-            status TEXT NOT NULL DEFAULT 'new',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_manual_jobs_role ON manual_jobs(role_type);
-        CREATE INDEX IF NOT EXISTS idx_manual_jobs_status ON manual_jobs(status);
-
-        CREATE TABLE IF NOT EXISTS manual_applications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            job_id INTEGER NOT NULL REFERENCES manual_jobs(id) ON DELETE CASCADE,
+            job_id TEXT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
             status TEXT NOT NULL DEFAULT 'drafted',
             resume_file TEXT DEFAULT '',
             greeting_file TEXT DEFAULT '',
@@ -226,6 +221,7 @@ def _init_manual_tables(conn: sqlite3.Connection) -> None:
             notes TEXT DEFAULT '',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
+        CREATE INDEX IF NOT EXISTS idx_applications_job_id ON applications(job_id);
 
         CREATE TABLE IF NOT EXISTS manual_skills (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -249,7 +245,7 @@ def _init_manual_tables(conn: sqlite3.Connection) -> None:
 
         CREATE TABLE IF NOT EXISTS manual_interviews (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            job_id INTEGER REFERENCES manual_jobs(id) ON DELETE SET NULL,
+            job_id TEXT REFERENCES jobs(id) ON DELETE SET NULL,
             company TEXT DEFAULT '',
             position TEXT DEFAULT '',
             interview_date TEXT DEFAULT '',
@@ -288,7 +284,7 @@ def _init_manual_tables(conn: sqlite3.Connection) -> None:
         CREATE TABLE IF NOT EXISTS manual_mock_sessions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             role_type TEXT DEFAULT '',
-            job_id INTEGER REFERENCES manual_jobs(id) ON DELETE SET NULL,
+            job_id TEXT REFERENCES jobs(id) ON DELETE SET NULL,
             messages TEXT DEFAULT '',
             finished INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

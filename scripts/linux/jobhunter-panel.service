@@ -1,0 +1,28 @@
+# JobHunter Pro 面板 systemd 用户服务（Ubuntu 长期运行）
+#
+# 安装：
+#   mkdir -p ~/.config/systemd/user
+#   cp scripts/linux/jobhunter-panel.service ~/.config/systemd/user/
+#   # 编辑 ExecStart，把 /home/用户名 改成实际路径（或直接软链 ~/bin/jobhunter 后使用 jobhunter 命令）
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now jobhunter-panel
+#
+# 查看日志：journalctl --user -u jobhunter-panel -f
+#
+# 注意：面板绑定 127.0.0.1，远程访问请用 start_jobhunter_pro.sh 的 Tailscale 转发，
+# 或 ssh -L 8686:127.0.0.1:8686。Chrome 调试实例由 start_jobhunter_pro.sh 或
+# 桌面自启项拉起（服务本身不启动图形浏览器）。
+
+[Unit]
+Description=JobHunter Pro local web panel
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/jobhunter_pro
+ExecStart=%h/jobhunter_pro/.venv/bin/python -m jobhunter_pro.main web --no-open
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

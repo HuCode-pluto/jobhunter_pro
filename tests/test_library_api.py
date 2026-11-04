@@ -141,7 +141,7 @@ class LibraryApiTests(unittest.TestCase):
         self.assertIn("tailored", result)
 
         # 定制文件落盘
-        out_dir = server.DATA_DIR / "output" / f"{result['job_id']:04d}"
+        out_dir = server.DATA_DIR / "output" / result["job_id"]
         self.assertTrue((out_dir / "打招呼语.md").exists())
         self.assertTrue((out_dir / "求职信.md").exists())
         self.assertTrue((out_dir / "定制简历.md").exists())
@@ -190,7 +190,7 @@ class LibraryApiTests(unittest.TestCase):
         status, _, body = self._request(f"/api/library/jobs/{job_id}/process", "POST")
         self.assertTrue(status.startswith("200"), body)
         self.assertIn("job_id", json.loads(body))
-        status, _, body = self._request("/api/library/jobs/batch-process", "POST", {"ids": [job_id, 9999]})
+        status, _, body = self._request("/api/library/jobs/batch-process", "POST", {"ids": [job_id, "not-exist"]})
         payload = json.loads(body)
         self.assertEqual(payload["ok_count"], 1)
         self.assertTrue(any("岗位不存在" in r.get("error", "") for r in payload["results"]))

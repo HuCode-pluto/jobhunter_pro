@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=JobHunter Pro Chrome
+Comment=专用 Chrome 调试实例（登录态持久，供 JobHunter Pro 采集/链接提取使用）
+Exec=bash -lc 'nohup ~/jobhunter_pro/scripts/linux/start_jobhunter_pro.sh >/tmp/jobhunter_pro-start.log 2>&1 &'
+Hidden=false
+X-GNOME-Autostart-enabled=true

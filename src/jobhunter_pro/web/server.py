@@ -3386,7 +3386,7 @@ def api_resume_delete():
 		return _json_response({"error": str(e)}, 500)
 
 
-# ─── Job Library APIs（手动求职流水线：粘贴 JD / 面试复盘 / 题库 / 技能地图） ───
+# ─── Job Library APIs（统一岗位库：手动 + 采集岗位；面试/题库/技能地图） ───
 
 def _library_config() -> dict:
 	return load_config(CONFIG_PATH)
@@ -3425,12 +3425,17 @@ def _library_error(exc: Exception) -> HTTPResponse:
 	raise exc
 
 
-def _run_manual_pipeline(llm, config: dict, conn, jd: dict, jd_text: str, role_type: str | None) -> dict:
-	"""解析结果 → 硬过滤 + 打分 → 入库 + 技能统计；分数达标生成定制材料。"""
+def _library_job_dir(job_id: str) -> str:
+	"""输出目录名：job_id 做文件名安全处理（手动岗位为 manual-xxxx）。"""
+	return "".join(c for c in str(job_id) if c.isalnum() or c in "-_")[:40] or "job"
+
+
+def _run_manual_pipeline(llm, config: dict, conn, jd: dict, jd_text: str, role_type: str | None, job_id: str | None = None) -> dict:
+	"""解析结果 → 硬过滤 + 打分 → 写入 jobs 表 + 技能统计；分数达标生成定制材料。"""
 	from jobhunter_pro.manual.db import (
-		add_manual_application,
-		get_manual_application,
-		insert_manual_job,
+		add_library_application,
+		get_library_application,
+		insert_library_job,
 		upsert_manual_skill,
 	)
 	from jobhunter_pro.manual.matcher import GENERIC_ROLE_CFG, score_job
@@ -3439,52 +3444,63 @@ def _run_manual_pipeline(llm, config: dict, conn, jd: dict, jd_text: str, role_t
 	resume = _library_resume(llm, config)
 	roles = _library_roles(config)
 	role_name = role_type or ""
-	if not role_name:
-		role_name = next((r["name"] for r in roles if r["name"]), "")
 	target_names = {r["name"] for r in roles}
 	role_cfg = next((r for r in roles if r["name"] == role_name), GENERIC_ROLE_CFG)
 
+	salary_text = ""
+	if jd.get("salary_min") or jd.get("salary_max"):
+		low, high = jd.get("salary_min"), jd.get("salary_max")
+		if low and high and low != high:
+			salary_text = f"{low / 1000:g}-{high / 1000:g}K"
+		elif low:
+			salary_text = f"{low / 1000:g}K起"
+		elif high:
+			salary_text = f"{high / 1000:g}K"
+		if jd.get("salary_note"):
+			salary_text += f"·{jd['salary_note']}"
+
+	result = score_job(llm, resume, jd, jd_text, role_cfg)
 	fields = {
-		"role_type": role_name,
-		"jd_raw": jd_text,
+		"source_platform": "manual",
+		"title": jd.get("title", ""),
+		"company": jd.get("company", ""),
+		"salary": salary_text,
+		"city": jd.get("city", ""),
+		"experience": jd.get("years_required", ""),
+		"education": jd.get("education_required", ""),
+		"jd": jd_text,
 		"jd_json": json.dumps(jd, ensure_ascii=False),
 		"red_flags": "/".join(jd.get("red_flags", [])),
-		"jd_loaded": 1,
-	}
-	result = score_job(llm, resume, jd, jd_text, role_cfg)
-	if result["reasons"]:
-		fields.update({
-			"status": "rejected",
-			"match_score": result["score"],
-			"missing_skills": json.dumps(result.get("missing_skills", []), ensure_ascii=False),
-			"reject_reason": "；".join(result["reasons"]),
-		})
-		job_id = insert_manual_job(conn, fields)
-		for sp in jd.get("skill_points", []):
-			upsert_manual_skill(conn, sp["name"], role_name, sp.get("category", "其他"))
-		return {"job_id": job_id, "role": role_name, "reasons": result["reasons"], "score": result["score"]}
-
-	score = result["score"]
-	min_score = config.get("apply", {}).get("min_score", 60)
-	status = "matched" if score is not None and score >= min_score else "new"
-	fields.update({
-		"status": status,
-		"match_score": score,
+		"role_type": role_name,
+		"salary_min": jd.get("salary_min"),
+		"salary_max": jd.get("salary_max"),
+		"salary_note": jd.get("salary_note", ""),
+		"years_required": jd.get("years_required", ""),
+		"education_required": jd.get("education_required", ""),
 		"missing_skills": json.dumps(result.get("missing_skills", []), ensure_ascii=False),
-	})
-	job_id = insert_manual_job(conn, fields)
+		"score": int(round(result["score"])) if result["score"] is not None else 0,
+		"score_reason": (result.get("report") or {}).get("summary", ""),
+	}
+	if result["reasons"]:
+		fields.update({"status": "rejected", "reject_reason": "；".join(result["reasons"])})
+	elif result["score"] is not None and result["score"] >= config.get("apply", {}).get("min_score", 60):
+		fields["status"] = "matched"
+	else:
+		fields["status"] = "new"
+
+	saved_id = insert_library_job(conn, {**fields, "id": job_id} if job_id else fields)
 	for sp in jd.get("skill_points", []):
 		upsert_manual_skill(conn, sp["name"], role_name, sp.get("category", "其他"))
 
-	summary = {"job_id": job_id, "role": role_name, "score": score,
+	summary = {"job_id": saved_id, "role": role_name, "score": result["score"],
 			   "summary": (result.get("report") or {}).get("summary", ""),
-			   "missing": result.get("missing_skills", [])}
-	if status == "matched" and role_name in target_names:
+			   "missing": result.get("missing_skills", []), "reasons": result["reasons"]}
+	if not result["reasons"] and fields["status"] == "matched" and role_name in target_names:
 		try:
 			content = tailor(llm, resume, jd)
-			files = save_outputs(job_id, jd.get("title", ""), content, _library_output_dir())
-			if not get_manual_application(conn, job_id):
-				add_manual_application(conn, job_id, files)
+			files = save_outputs(saved_id, jd.get("title", ""), content, _library_output_dir())
+			if not get_library_application(conn, saved_id):
+				add_library_application(conn, saved_id, files)
 			summary["tailored"] = True
 		except Exception as exc:
 			summary["tailor_error"] = str(exc)[:200]
@@ -3504,28 +3520,31 @@ def _parse_jd_json(conn, job) -> dict | None:
 def api_library_jobs():
 	db = _get_web_db()
 	try:
-		from jobhunter_pro.manual.db import list_manual_jobs
+		from jobhunter_pro.manual.db import list_library_jobs
 
+		source = (request.query.get("source") or "").strip()
 		role = (request.query.get("role") or "").strip()
 		status = (request.query.get("status") or "").strip()
+		keyword = (request.query.get("keyword") or "").strip()
 		min_score = request.query.get("min_score")
 		limit = _integer_param("limit", 100, minimum=1, maximum=500)
-		rows = list_manual_jobs(
-			db, role=role or None, status=status or None,
-			min_score=float(min_score) if min_score else None, limit=limit,
+		rows = list_library_jobs(
+			db, source=source or None, role=role or None, status=status or None,
+			min_score=float(min_score) if min_score else None,
+			keyword=keyword or None, limit=limit,
 		)
 		return _json_response([dict(r) for r in rows])
 	finally:
 		db.close()
 
 
-@app.route("/api/library/jobs/<job_id:int>")
-def api_library_job_detail(job_id: int):
+@app.route("/api/library/jobs/<job_id>")
+def api_library_job_detail(job_id: str):
 	db = _get_web_db()
 	try:
-		from jobhunter_pro.manual.db import get_manual_application, get_manual_job
+		from jobhunter_pro.manual.db import get_library_application, get_library_job
 
-		job = get_manual_job(db, job_id)
+		job = get_library_job(db, job_id)
 		if not job:
 			return _json_response({"error": "岗位不存在"}, 404)
 		data = dict(job)
@@ -3535,7 +3554,9 @@ def api_library_job_detail(job_id: int):
 				data["missing_skills"] = json.loads(data["missing_skills"])
 			except (json.JSONDecodeError, TypeError):
 				data["missing_skills"] = []
-		app = get_manual_application(db, job_id)
+		else:
+			data["missing_skills"] = []
+		app = get_library_application(db, job_id)
 		data["application"] = dict(app) if app else None
 		# 定制材料文件内容（打招呼语/求职信/定制简历）
 		for key in ("greeting_file", "cover_letter_file", "resume_file"):
@@ -3553,10 +3574,10 @@ def api_library_job_detail(job_id: int):
 
 @app.route("/api/library/jobs/manual", method="POST")
 def api_library_jobs_manual():
-	"""手动粘贴 JD（批量用一行 ====== 分隔）：解析 → 方向识别 → 打分 → 入库。"""
+	"""手动粘贴 JD（批量用一行 ====== 分隔）：解析 → 方向识别 → 打分 → 写入岗位库。"""
 	import re
 
-	from jobhunter_pro.manual.db import insert_manual_job, upsert_manual_skill
+	from jobhunter_pro.manual.db import insert_library_job, upsert_manual_skill
 	from jobhunter_pro.manual.jd_parser import detect_role, detect_role_llm, parse_jd
 	from jobhunter_pro.manual.matcher import GENERIC_ROLE_CFG, score_job
 
@@ -3587,29 +3608,25 @@ def api_library_jobs_manual():
 					results.append({"error": "无法从文本中识别岗位信息"})
 					errors += 1
 					continue
-				fields = {
-					"source": "manual", "url": url,
-					"company": jd.get("company", ""), "title": jd.get("title", ""),
-					"city": jd.get("city", ""), "salary_min": jd.get("salary_min"),
-					"salary_max": jd.get("salary_max"), "salary_note": jd.get("salary_note", ""),
-					"years_required": jd.get("years_required", ""),
-					"education_required": jd.get("education_required", ""),
-				}
 				role_name = detect_role(jd, roles) or detect_role_llm(llm, jd, roles) or "其他"
 				if role_name not in {r["name"] for r in roles}:
 					# 非目标方向：用通用标准打分（不做城市/薪资硬过滤），照常入库
 					resume = _library_resume(llm, config)
 					result = score_job(llm, resume, jd, chunk, GENERIC_ROLE_CFG)
-					fields.update({
+					saved_id = insert_library_job(db, {
+						"source_platform": "manual",
+						"title": jd.get("title", ""), "company": jd.get("company", ""),
+						"city": jd.get("city", ""), "url": url,
+						"jd": chunk, "jd_json": json.dumps(jd, ensure_ascii=False),
 						"role_type": role_name, "status": "new",
-						"match_score": result["score"],
+						"score": int(round(result["score"])) if result["score"] is not None else 0,
+						"score_reason": (result.get("report") or {}).get("summary", ""),
 						"missing_skills": json.dumps(result.get("missing_skills", []), ensure_ascii=False),
 					})
-					job_id = insert_manual_job(db, fields)
 					for sp in jd.get("skill_points", []):
 						upsert_manual_skill(db, sp["name"], role_name, sp.get("category", "其他"))
 					results.append({
-						"job_id": job_id, "role": role_name, "score": result["score"],
+						"job_id": saved_id, "role": role_name, "score": result["score"],
 						"note": f"已按「{role_name}」归档（非目标方向，按通用标准打分）",
 						"missing": result.get("missing_skills", []),
 						"summary": (result.get("report") or {}).get("summary", ""),
@@ -3678,8 +3695,8 @@ def api_library_jobs_fetch_link():
 	return _json_response({"text": text})
 
 
-@app.route("/api/library/jobs/<job_id:int>/role", method="POST")
-def api_library_job_role(job_id: int):
+@app.route("/api/library/jobs/<job_id>/role", method="POST")
+def api_library_job_role(job_id: str):
 	"""手动修正岗位方向（自由文本，如"技术支持工程师"）。"""
 	try:
 		body = request.json or {}
@@ -3688,29 +3705,29 @@ def api_library_job_role(job_id: int):
 		return _json_response({"error": "请求体格式无效"}, 400)
 	if not role_type:
 		return _json_response({"error": "方向不能为空"}, 400)
-	from jobhunter_pro.manual.db import get_manual_job, update_manual_job
+	from jobhunter_pro.manual.db import get_library_job, update_library_job
 
 	db = _get_web_db()
 	try:
-		if not get_manual_job(db, job_id):
+		if not get_library_job(db, job_id):
 			return _json_response({"error": "岗位不存在"}, 404)
 		with job_mutation_lock:
-			update_manual_job(db, job_id, role_type=role_type)
+			update_library_job(db, job_id, role_type=role_type)
 		return _json_response({"ok": True})
 	finally:
 		db.close()
 
 
-@app.route("/api/library/jobs/<job_id:int>/status", method="POST")
-def api_library_job_status(job_id: int):
-	"""岗位状态流转 + 投递台账同步（applied→submitted 等）。"""
+@app.route("/api/library/jobs/<job_id>/status", method="POST")
+def api_library_job_status(job_id: str):
+	"""手动岗位状态流转 + 投递台账同步（applied→submitted 等）。采集岗位请在工作台管理。"""
 	from jobhunter_pro.manual.db import (
 		JOB_STATUSES,
-		get_manual_application,
-		get_manual_job,
-		update_manual_application,
-		update_manual_application_note,
-		update_manual_job,
+		get_library_application,
+		get_library_job,
+		update_library_application,
+		update_library_application_note,
+		update_library_job,
 	)
 
 	try:
@@ -3725,40 +3742,43 @@ def api_library_job_status(job_id: int):
 		return _json_response({"error": f"非法状态，可选：{JOB_STATUSES}"}, 400)
 	db = _get_web_db()
 	try:
-		if not get_manual_job(db, job_id):
+		job = get_library_job(db, job_id)
+		if not job:
 			return _json_response({"error": "岗位不存在"}, 404)
+		if job["source_platform"] != "manual":
+			return _json_response({"error": "采集岗位的状态请在「工作台」管理"}, 400)
 		with job_mutation_lock:
-			update_manual_job(db, job_id, status=status)
-			app_row = get_manual_application(db, job_id)
+			update_library_job(db, job_id, status=status)
+			app_row = get_library_application(db, job_id)
 			if app_row:
 				if status == "applied":
-					update_manual_application(db, job_id, "submitted", note)
+					update_library_application(db, job_id, "submitted", note)
 				elif status in ("interview", "offer", "rejected"):
-					update_manual_application(db, job_id, status, note)
+					update_library_application(db, job_id, status, note)
 				elif note:
-					update_manual_application_note(db, job_id, note)
+					update_library_application_note(db, job_id, note)
 		return _json_response({"ok": True})
 	finally:
 		db.close()
 
 
-def _library_process_one(job_id: int) -> tuple[int, dict]:
+def _library_process_one(job_id: str) -> tuple[int, dict]:
 	"""对单个岗位跑解析+打分+定制（幂等，可重复调用）。返回 (status_code, payload)。"""
-	from jobhunter_pro.manual.db import get_manual_job, update_manual_job
+	from jobhunter_pro.manual.db import get_library_job, update_library_job
 	from jobhunter_pro.manual.jd_parser import parse_jd
 
 	llm = _library_llm()
 	config = _library_config()
 	db = _get_web_db()
 	try:
-		job = get_manual_job(db, job_id)
+		job = get_library_job(db, job_id)
 		if not job:
 			return 404, {"error": "岗位不存在"}
 		jd = _parse_jd_json(db, job)
-		if not jd and job["jd_raw"]:
+		if not jd and job["jd"]:
 			try:
-				jd = parse_jd(llm, job["jd_raw"])
-				update_manual_job(db, job_id, jd_json=json.dumps(jd, ensure_ascii=False))
+				jd = parse_jd(llm, job["jd"])
+				update_library_job(db, job_id, jd_json=json.dumps(jd, ensure_ascii=False))
 			except Exception as exc:
 				if isinstance(exc, AIRequestError):
 					return 400, {"error": exc.user_message}
@@ -3766,7 +3786,7 @@ def _library_process_one(job_id: int) -> tuple[int, dict]:
 		if not jd:
 			return 400, {"error": "该岗位没有 JD 原文，无法解析"}
 		try:
-			summary = _run_manual_pipeline(llm, config, db, jd, job["jd_raw"] or "", job["role_type"])
+			summary = _run_manual_pipeline(llm, config, db, jd, job["jd"] or "", job["role_type"], job_id)
 		except HTTPResponse:
 			raise
 		except Exception as exc:
@@ -3778,8 +3798,8 @@ def _library_process_one(job_id: int) -> tuple[int, dict]:
 		db.close()
 
 
-@app.route("/api/library/jobs/<job_id:int>/process", method="POST")
-def api_library_job_process(job_id: int):
+@app.route("/api/library/jobs/<job_id>/process", method="POST")
+def api_library_job_process(job_id: str):
 	try:
 		status_code, payload = _library_process_one(job_id)
 	except HTTPResponse:
@@ -3794,8 +3814,8 @@ def api_library_jobs_batch_process():
 	try:
 		body = request.json or {}
 		ids = body.get("ids") if isinstance(body, dict) else None
-		if not isinstance(ids, list) or not all(isinstance(i, int) for i in ids):
-			return _json_response({"error": "ids 必须是整数数组"}, 400)
+		if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
+			return _json_response({"error": "ids 必须是字符串数组"}, 400)
 	except (ValueError, TypeError):
 		return _json_response({"error": "请求体格式无效"}, 400)
 	results = []
@@ -3805,27 +3825,30 @@ def api_library_jobs_batch_process():
 		except HTTPResponse:
 			raise
 		except Exception as exc:
-			status_code, payload = 500, {"id": job_id, "error": str(exc)[:120]}
-		results.append({"id": job_id, **payload} if status_code == 200 else {"id": job_id, "error": payload.get("error", "处理失败")})
+			status_code, payload = 500, {"error": str(exc)[:120]}
+		results.append(
+			{"id": job_id, **payload} if status_code == 200
+			else {"id": job_id, "error": payload.get("error", "处理失败")}
+		)
 	ok = sum(1 for r in results if not r.get("error"))
 	return _json_response({"results": results, "ok_count": ok})
 
 
-@app.route("/api/library/jobs/<job_id:int>/prep", method="POST")
-def api_library_job_prep(job_id: int):
+@app.route("/api/library/jobs/<job_id>/prep", method="POST")
+def api_library_job_prep(job_id: str):
 	"""面试准备包：已生成过直接返回缓存（cached=True），force=true 强制重新生成。"""
-	from jobhunter_pro.manual.db import get_manual_job, upsert_manual_prep_question
+	from jobhunter_pro.manual.db import get_library_job, upsert_manual_prep_question
 	from jobhunter_pro.manual.interview_llm import prep_pack
 
 	force = request.query.get("force") == "true"
-	out = _library_output_dir() / f"{job_id:04d}" / "面试准备包.md"
+	out = _library_output_dir() / _library_job_dir(job_id) / "面试准备包.md"
 	if out.exists() and not force:
 		return _json_response({"ok": True, "path": str(out), "content": out.read_text(encoding="utf-8"), "cached": True})
 	llm = _library_llm()
 	config = _library_config()
 	db = _get_web_db()
 	try:
-		job = get_manual_job(db, job_id)
+		job = get_library_job(db, job_id)
 		if not job:
 			return _json_response({"error": "岗位不存在"}, 404)
 		if not job["jd_json"]:
@@ -3860,18 +3883,18 @@ def api_library_job_prep(job_id: int):
 		db.close()
 
 
-@app.route("/api/library/jobs/<job_id:int>/pdf", method="POST")
-def api_library_job_pdf(job_id: int):
+@app.route("/api/library/jobs/<job_id>/pdf", method="POST")
+def api_library_job_pdf(job_id: str):
 	"""把岗位定制简历（Markdown）导出为 PDF。"""
-	from jobhunter_pro.manual.db import get_manual_application, get_manual_job
+	from jobhunter_pro.manual.db import get_library_application, get_library_job
 	from jobhunter_pro.manual.resume_pdf import export_tailored_resume
 
 	db = _get_web_db()
 	try:
-		job = get_manual_job(db, job_id)
+		job = get_library_job(db, job_id)
 		if not job:
 			return _json_response({"error": "岗位不存在"}, 404)
-		app_row = get_manual_application(db, job_id)
+		app_row = get_library_application(db, job_id)
 		if not app_row or not app_row["resume_file"]:
 			return _json_response({"error": "该岗位还没有定制简历，先在详情页点「生成定制内容」"}, 400)
 		path = Path(app_row["resume_file"])
@@ -3886,13 +3909,13 @@ def api_library_job_pdf(job_id: int):
 		db.close()
 
 
-@app.route("/api/library/jobs/<job_id:int>/application", method="PUT")
-def api_library_application_update(job_id: int):
+@app.route("/api/library/jobs/<job_id>/application", method="PUT")
+def api_library_application_update(job_id: str):
 	"""投递台账：更新状态 + 备注（只追加备注不改状态时用 note-only）。"""
 	from jobhunter_pro.manual.db import (
-		get_manual_application,
-		update_manual_application,
-		update_manual_application_note,
+		get_library_application,
+		update_library_application,
+		update_library_application_note,
 	)
 
 	try:
@@ -3908,13 +3931,13 @@ def api_library_application_update(job_id: int):
 		return _json_response({"error": f"非法状态，可选：{sorted(valid)}"}, 400)
 	db = _get_web_db()
 	try:
-		if not get_manual_application(db, job_id):
+		if not get_library_application(db, job_id):
 			return _json_response({"error": "该岗位还没有投递记录"}, 404)
 		with job_mutation_lock:
 			if status:
-				update_manual_application(db, job_id, status, note)
+				update_library_application(db, job_id, status, note)
 			elif note:
-				update_manual_application_note(db, job_id, note)
+				update_library_application_note(db, job_id, note)
 		return _json_response({"ok": True})
 	finally:
 		db.close()
@@ -3922,12 +3945,12 @@ def api_library_application_update(job_id: int):
 
 # ─── 面试复盘 / 题库 ───
 
-def _process_interview_bg(iid: int, audio_path: str, transcript: str, job_id: int | None):
+def _process_interview_bg(iid: int, audio_path: str, transcript: str, job_id: str | None):
 	"""后台线程：转写 → LLM 复盘 → 入库（题库自动聚合）。"""
 	import threading
 
 	from jobhunter_pro.manual.db import (
-		get_manual_job,
+		get_library_job,
 		rebuild_manual_question_bank,
 		save_manual_interview_questions,
 		update_manual_interview,
@@ -3947,7 +3970,7 @@ def _process_interview_bg(iid: int, audio_path: str, transcript: str, job_id: in
 		update_manual_interview(db, iid, transcript=transcript, error="")
 		jd_info = None
 		if job_id:
-			job = get_manual_job(db, job_id)
+			job = get_library_job(db, job_id)
 			if job and job["jd_json"]:
 				try:
 					jd_info = json.loads(job["jd_json"])
@@ -3995,8 +4018,7 @@ def api_library_interview_upload():
 
 	from jobhunter_pro.manual.db import insert_manual_interview
 
-	job_id_raw = (request.forms.get("job_id") or "").strip()
-	job_id = int(job_id_raw) if job_id_raw.isdigit() else None
+	job_id = (request.forms.get("job_id") or "").strip() or None
 	company = request.forms.get("company") or ""
 	position = request.forms.get("position") or ""
 	interview_date = request.forms.get("interview_date") or ""
@@ -4114,7 +4136,7 @@ def api_library_question_bank_rebuild():
 
 @app.route("/api/library/mock/start", method="POST")
 def api_library_mock_start():
-	from jobhunter_pro.manual.db import get_manual_job, insert_manual_mock_session
+	from jobhunter_pro.manual.db import get_library_job, insert_manual_mock_session
 	from jobhunter_pro.manual.interview_llm import mock_interviewer
 
 	try:
@@ -4122,8 +4144,7 @@ def api_library_mock_start():
 		if not isinstance(body, dict):
 			return _json_response({"error": "请求体必须是对象"}, 400)
 		role = str(body.get("role") or "")
-		job_id_raw = body.get("job_id")
-		job_id = int(job_id_raw) if isinstance(job_id_raw, int) else None
+		job_id = str(body.get("job_id") or "") or None
 	except (ValueError, TypeError):
 		return _json_response({"error": "请求体格式无效"}, 400)
 	llm = _library_llm()
@@ -4134,7 +4155,7 @@ def api_library_mock_start():
 	db = _get_web_db()
 	try:
 		if job_id:
-			job = get_manual_job(db, job_id)
+			job = get_library_job(db, job_id)
 			if job and job["jd_json"]:
 				jd_json = _parse_jd_json(db, job)
 		try:
@@ -4158,7 +4179,7 @@ def api_library_mock_start():
 
 @app.route("/api/library/mock/answer", method="POST")
 def api_library_mock_answer():
-	from jobhunter_pro.manual.db import get_manual_job, get_manual_mock_session, update_manual_mock_session
+	from jobhunter_pro.manual.db import get_library_job, get_manual_mock_session, update_manual_mock_session
 	from jobhunter_pro.manual.interview_llm import mock_interviewer
 
 	try:
@@ -4179,7 +4200,7 @@ def api_library_mock_answer():
 		history = json.loads(s["messages"])
 		if s["finished"]:
 			return _json_response({"reply": "本次模拟已结束，可重新开始一场。", "finished": True, "history": history})
-		job = get_manual_job(db, s["job_id"]) if s["job_id"] else None
+		job = get_library_job(db, s["job_id"]) if s["job_id"] else None
 		jd_json = _parse_jd_json(db, job) if job else None
 		history.append({"role": "user", "content": answer})
 		try:
@@ -4204,15 +4225,22 @@ def api_library_mock_answer():
 def api_library_report_weekly():
 	db = _get_web_db()
 	try:
-		total = db.execute("SELECT COUNT(*) FROM manual_jobs").fetchone()[0]
-		applied = db.execute("SELECT COUNT(*) FROM manual_jobs WHERE status IN ('applied','interview','offer')").fetchone()[0]
+		total = db.execute("SELECT COUNT(*) FROM jobs WHERE deleted_at IS NULL").fetchone()[0]
+		manual_total = db.execute(
+			"SELECT COUNT(*) FROM jobs WHERE source_platform = 'manual' AND deleted_at IS NULL"
+		).fetchone()[0]
+		collected_total = total - manual_total
+		applied = db.execute(
+			"SELECT COUNT(*) FROM jobs WHERE source_platform = 'manual' "
+			"AND status IN ('applied','interview','offer') AND deleted_at IS NULL"
+		).fetchone()[0]
 		interviews_n = db.execute("SELECT COUNT(*) FROM manual_interviews").fetchone()[0]
 		offers_n = db.execute("SELECT COUNT(*) FROM manual_offers WHERE status != 'rejected'").fetchone()[0]
-		matched = db.execute("SELECT COUNT(*) FROM manual_jobs WHERE match_score >= 60").fetchone()[0]
-		avg_score = db.execute("SELECT AVG(match_score) FROM manual_jobs WHERE match_score IS NOT NULL").fetchone()[0]
+		matched = db.execute("SELECT COUNT(*) FROM jobs WHERE score >= 60 AND deleted_at IS NULL").fetchone()[0]
+		avg_score = db.execute("SELECT AVG(score) FROM jobs WHERE score > 0 AND deleted_at IS NULL").fetchone()[0]
 		by_status = {
 			r["status"]: r["n"]
-			for r in db.execute("SELECT status, COUNT(*) n FROM manual_jobs GROUP BY status").fetchall()
+			for r in db.execute("SELECT status, COUNT(*) n FROM jobs WHERE deleted_at IS NULL GROUP BY status").fetchall()
 		}
 		recent_iv = [
 			dict(r)
@@ -4223,6 +4251,8 @@ def api_library_report_weekly():
 		]
 		return _json_response({
 			"total_jobs": total,
+			"manual_jobs": manual_total,
+			"collected_jobs": collected_total,
 			"applied": applied,
 			"matched_60plus": matched,
 			"avg_score": round(avg_score, 1) if avg_score else None,

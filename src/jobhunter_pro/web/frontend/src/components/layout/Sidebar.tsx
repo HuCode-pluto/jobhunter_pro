@@ -1,11 +1,17 @@
 import { NavLink } from 'react-router-dom'
-import { BriefcaseBusiness, Github, LayoutDashboard, Radar, Settings } from 'lucide-react'
+import { BookOpenText, Bot, BriefcaseBusiness, Github, LayoutDashboard, Map, Mic, MessagesSquare, Radar, Settings } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '工作台' },
   { to: '/jobs', icon: BriefcaseBusiness, label: '岗位池' },
   { to: '/monitor', icon: Radar, label: '监测执行' },
+  { to: '/library', icon: BookOpenText, label: '岗位库' },
+  { to: '/interviews', icon: Mic, label: '面试复盘' },
+  { to: '/question-bank', icon: MessagesSquare, label: '面试题库' },
+  { to: '/mock', icon: Bot, label: '模拟面试' },
+  { to: '/career', icon: BriefcaseBusiness, label: '求职管理' },
+  { to: '/skillmap', icon: Map, label: '技能地图' },
   { to: '/config', icon: Settings, label: '配置' },
 ]
 
@@ -48,7 +54,7 @@ export function Sidebar({ pendingReplies: pendingRepliesProp }: SidebarProps) {
           </div>
           <div className="hidden md:block">
             <div className="font-black text-sm tracking-tight text-foreground">JobHunter Pro</div>
-            <div className="text-[11px] text-muted">v2.4.0 · 本地控制台</div>
+            <div className="text-[11px] text-muted">v0.1.0 · 本地控制台</div>
           </div>
         </div>
       </div>

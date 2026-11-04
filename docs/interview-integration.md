@@ -2,7 +2,7 @@
 
 此功能将选定岗位交给面试工具，不改变 JobHunter Pro 的采集、确认、投递或监测流程，也不标记岗位“已发送”。无需安装面试工具即可导出 JD；直接联通目前是关联功能 PR 中的配套协议，不代表已有版本均已支持。
 
-配套接收实现：[Interview Sim PR #1](https://github.com/miaomiao636/interview-sim/pull/1)，测试分支为 `feat/jobhunter_pro-job-handoff`。在接收端正式合并/发布前，测试者需检出该分支并按其快速开始安装；普通用户可继续使用 Markdown，不必替换已有稳定安装。上游提案见 [JobHunter Pro #216](https://github.com/shengjidaguai-china/JobHunter Pro/issues/216)。
+配套接收实现：[Interview Sim PR #1](https://github.com/miaomiao636/interview-sim/pull/1)，测试分支为 `feat/jobhunter_pro-job-handoff`。在接收端正式合并/发布前，测试者需检出该分支并按其快速开始安装；普通用户可继续使用 Markdown，不必替换已有稳定安装。上游提案见 [JobHunter Pro #216](https://github.com/HuCode-pluto/jobhunter_pro/issues/216)。
 
 ## 用法
 

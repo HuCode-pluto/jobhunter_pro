@@ -21,7 +21,7 @@ Windows 用户请直接按下面的「Windows 首次安装与桌面快捷方式�
 首次使用请先在 frontend 目录构建前端产物（`dist` 不随 git 仓库跟踪，需本地按需构建），再安装 Python 包；否则 `pip install -e .` 会报 `frontend/dist` 缺失。
 
 ```bash
-git clone https://github.com/shengjidaguai-china/JobHunter Pro.git
+git clone https://github.com/HuCode-pluto/jobhunter_pro.git
 cd JobHunter Pro
 npm --prefix src/jobhunter_pro/web/frontend ci
 npm --prefix src/jobhunter_pro/web/frontend run build
@@ -41,7 +41,7 @@ pip install -e ".[pdf]"
 3. 下载源码，在仓库自己的虚拟环境中安装。所有命令均在同一个 PowerShell 窗口依次执行：
 
 ```powershell
-git clone https://github.com/shengjidaguai-china/JobHunter Pro.git
+git clone https://github.com/HuCode-pluto/jobhunter_pro.git
 cd JobHunter Pro
 py -m venv .venv
 npm.cmd --prefix src/jobhunter_pro/web/frontend ci
@@ -73,12 +73,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\start_jobh
 brew install python node@22
 
 # 克隆并创建虚拟环境
-git clone https://github.com/shengjidaguai-china/JobHunter Pro.git
+git clone https://github.com/HuCode-pluto/jobhunter_pro.git
 cd JobHunter Pro
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-jobhunter_pro web
+jobhunter web
 ```
 
 注意：
@@ -114,7 +114,7 @@ Chrome 136+ 在使用默认用户目录时会忽略 `--remote-debugging-port`，
 ## 4. 完成本地配置
 
 ```bash
-jobhunter_pro web
+jobhunter web
 ```
 
 浏览器会打开 `http://127.0.0.1:8686`。Windows 用户通过快捷方式已经打开工作台，无需再启动一个 Web 进程。请在本地面板完成：
@@ -133,8 +133,8 @@ YAML 仍使用 `throttle.send_windows: ["09:00-12:00", "14:00-16:00"]` 字符串
 ## 5. 检查连接
 
 ```bash
-jobhunter_pro ai-status
-jobhunter_pro connect
+jobhunter ai-status
+jobhunter connect
 ```
 
 - `ai-status` 安全检查 AI 服务，不显示完整 Key。
@@ -154,7 +154,7 @@ Windows 未激活虚拟环境时，对应检查命令为：
 确认简历、AI 和 Chrome 均已就绪后运行：
 
 ```bash
-jobhunter_pro run
+jobhunter run
 ```
 
 完整流程为：采集岗位 → AI 评分 → 人工确认投递清单 → 生成招呼语 → 低频发送 → 监听回复。

@@ -6,6 +6,12 @@ const pageTitles: Record<string, string> = {
   '/': '工作台',
   '/jobs': '岗位池',
   '/monitor': '监测执行',
+  '/library': '岗位库',
+  '/interviews': '面试复盘',
+  '/question-bank': '面试题库',
+  '/mock': '模拟面试',
+  '/career': '求职管理',
+  '/skillmap': '技能地图',
   '/config': '配置',
 }
 

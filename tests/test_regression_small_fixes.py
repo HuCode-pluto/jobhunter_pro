@@ -57,7 +57,7 @@ class VersionMetadataTests(unittest.TestCase):
             / "Sidebar.tsx"
         ).read_text(encoding="utf-8")
 
-        version = "2.4.0"
+        version = jobhunter_pro.__version__
         frontend = ROOT / "src" / "jobhunter_pro" / "web" / "frontend"
         package = json.loads((frontend / "package.json").read_text(encoding="utf-8"))
         lock = json.loads((frontend / "package-lock.json").read_text(encoding="utf-8"))

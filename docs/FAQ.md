@@ -25,7 +25,7 @@
 
 项目通过 Chrome DevTools Protocol 连接你已登录的浏览器，因此不需要保存招聘平台账号密码。JobHunter Pro 不会替你启动或登录平台；请先开启远程调试，并在同一个 Chrome 窗口完成登录。
 
-## 为什么 `jobhunter_pro connect` 检测失败？
+## 为什么 `jobhunter connect` 检测失败？
 
 请依次确认：
 

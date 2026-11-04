@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider'
 import { TagsInput } from '@/components/ui/tags-input'
 import { CityMultiSelect, type CityOption } from '@/components/config/CityMultiSelect'
 import { ResumeUploadSection } from '@/components/config/ResumeUploadSection'
+import { RolesEditor } from '@/components/config/RolesEditor'
 import { SendWindowsInput, sendWindowsError } from '@/components/config/SendWindowsInput'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Save, RotateCcw, ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
@@ -846,6 +847,57 @@ export default function ConfigPage() {
             <Field label="历史记录文件路径">
               <Input value={config.dedup?.history_file || ''} onChange={e => updateConfig('dedup.history_file', e.target.value)} />
             </Field>
+          </div>
+        </SectionCard>
+
+        {/* Manual Pipeline Section */}
+        <SectionCard title="求职方向与手动流水线" sectionKey="job_preferences" expanded={expandedSections} toggle={toggleSection}>
+          <div className="space-y-4">
+            <Field label="目标岗位方向" hint="手动加岗时按关键词归类并做硬条件过滤">
+              <RolesEditor
+                value={config.job_preferences?.roles ?? []}
+                onChange={v => updateConfig('job_preferences.roles', v)}
+              />
+            </Field>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Field label="匹配分阈值 (≥ 自动标记匹配)" hint="60 = 基本可投">
+                <Input type="number" min={0} max={100} value={config.apply?.min_score ?? 60} onChange={e => updateConfig('apply.min_score', Number(e.target.value))} />
+              </Field>
+              <Field label="每日投递上限" hint="手动流水线参考值">
+                <Input type="number" min={1} max={100} value={config.apply?.max_per_day ?? 20} onChange={e => updateConfig('apply.max_per_day', Number(e.target.value))} />
+              </Field>
+            </div>
+            <div className="rounded-lg border border-card-border bg-surface p-3 space-y-3">
+              <div className="text-xs font-black text-foreground">截图识别（视觉模型）</div>
+              <Field label="Base URL" hint="默认智谱 GLM-4V-Flash（免费）">
+                <Input value={config.vision_llm?.base_url || ''} onChange={e => updateConfig('vision_llm.base_url', e.target.value)} placeholder="https://open.bigmodel.cn/api/paas/v4" />
+              </Field>
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <Field label="API Key 环境变量名" hint="Key 只从环境变量读取，不写入配置文件">
+                  <Input value={config.vision_llm?.api_key_env || 'ZHIPU_API_KEY'} onChange={e => updateConfig('vision_llm.api_key_env', e.target.value)} />
+                </Field>
+                <Field label="模型">
+                  <Input value={config.vision_llm?.model || 'glm-4v-flash'} onChange={e => updateConfig('vision_llm.model', e.target.value)} />
+                </Field>
+              </div>
+            </div>
+            <div className="rounded-lg border border-card-border bg-surface p-3 space-y-3">
+              <div className="text-xs font-black text-foreground">面试录音转写</div>
+              <Field label="转写方式" hint="paste=手动粘贴转写文本（默认）；whisper=本地 faster-whisper（需安装 jobhunter_pro[asr]）">
+                <Select value={config.asr?.provider || 'paste'} onChange={e => updateConfig('asr.provider', e.target.value)}>
+                  <option value="paste">手动粘贴（默认）</option>
+                  <option value="whisper">本地 whisper</option>
+                </Select>
+              </Field>
+              <Field label="whisper 模型大小">
+                <Select value={config.asr?.whisper_model || 'small'} onChange={e => updateConfig('asr.whisper_model', e.target.value)}>
+                  <option value="tiny">tiny（最快，精度低）</option>
+                  <option value="base">base</option>
+                  <option value="small">small（推荐）</option>
+                  <option value="medium">medium（慢，精度高）</option>
+                </Select>
+              </Field>
+            </div>
           </div>
         </SectionCard>
     </div>

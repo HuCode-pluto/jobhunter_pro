@@ -8,7 +8,7 @@ narrow, validated JSON contract over the local Dashboard server.
 Start the local server without opening a browser:
 
 ```bash
-jobhunter_pro web --no-open
+jobhunter web --no-open
 ```
 
 The workbench defaults to `127.0.0.1:8686`. Agent routes additionally require

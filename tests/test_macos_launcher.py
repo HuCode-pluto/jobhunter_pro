@@ -18,7 +18,7 @@ class MacOSLauncherTests(unittest.TestCase):
 		self.assertIn("BASH_SOURCE", text)
 		self.assertIn("jobhunter_pro.main", text)
 		self.assertIn("--python-path", text)
-		self.assertIn("command -v jobhunter_pro", text)
+		self.assertIn("command -v jobhunter", text)
 		self.assertIn("remote-debugging-port=9222", text)
 		self.assertIn("--user-data-dir", text)
 		self.assertIn("http://127.0.0.1:8686", text)

@@ -3,6 +3,12 @@ import { Sidebar } from './components/layout/Sidebar'
 import { Header } from './components/layout/Header'
 import DashboardPage from './pages/DashboardPage'
 import ConfigPage from './pages/ConfigPage'
+import LibraryPage from './pages/LibraryPage'
+import InterviewsPage from './pages/InterviewsPage'
+import QuestionBankPage from './pages/QuestionBankPage'
+import MockInterviewPage from './pages/MockInterviewPage'
+import CareerPage from './pages/CareerPage'
+import SkillMapPage from './pages/SkillMapPage'
 import { OnboardingTour } from './components/onboarding/OnboardingTour'
 
 function JobsPage() {
@@ -25,6 +31,12 @@ export default function App() {
               <Route path="/" element={<DashboardPage />} />
               <Route path="/jobs" element={<JobsPage />} />
               <Route path="/monitor" element={<MonitorPage />} />
+              <Route path="/library" element={<LibraryPage />} />
+              <Route path="/interviews" element={<InterviewsPage />} />
+              <Route path="/question-bank" element={<QuestionBankPage />} />
+              <Route path="/mock" element={<MockInterviewPage />} />
+              <Route path="/career" element={<CareerPage />} />
+              <Route path="/skillmap" element={<SkillMapPage />} />
               <Route path="/config" element={<ConfigPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

@@ -1,8 +1,8 @@
-# BossHunter 配置指南
+# JobHunter Pro 配置指南
 
-推荐运行 `bosshunter web`，在 `http://127.0.0.1:8686` 的本地面板完成配置。需要手动编辑时，可复制仓库根目录的 [`config.example.yaml`](../config.example.yaml) 为 `config.yaml`。
+推荐运行 `jobhunter_pro web`，在 `http://127.0.0.1:8686` 的本地面板完成配置。需要手动编辑时，可复制仓库根目录的 [`config.example.yaml`](../config.example.yaml) 为 `config.yaml`。
 
-面板中填写的 AI API Key 或 Auth Token 会保存在与配置文件同目录的隐藏凭据文件（默认 `.config.credentials.yaml`），并以仅当前用户可读写的权限写入；普通 `config.yaml`、配置下载和浏览器接口都不包含原始凭据。旧版写在 `config.yaml` 中的凭据会在下次启动 BossHunter 时自动迁移。不要分享隐藏凭据文件。
+面板中填写的 AI API Key 或 Auth Token 会保存在与配置文件同目录的隐藏凭据文件（默认 `.config.credentials.yaml`），并以仅当前用户可读写的权限写入；普通 `config.yaml`、配置下载和浏览器接口都不包含原始凭据。旧版写在 `config.yaml` 中的凭据会在下次启动 JobHunter Pro 时自动迁移。不要分享隐藏凭据文件。
 
 ## 核心配置
 
@@ -39,12 +39,12 @@
 - 豆包 / 火山方舟：OpenAI Chat Completions，可通过 `ARK_API_KEY` 提供 Key。
 - 其他 OpenAI 兼容接口：填写服务商提供的 Base URL 和模型 ID，可通过 `OPENAI_API_KEY` 提供 Key。
 
-不要把真实 Key 写入示例、Issue、聊天或 Git 提交。BossHunter 不读取 Codex、Claude Code、ChatGPT 等工具自身的 OAuth、Cookie 或登录凭证。
+不要把真实 Key 写入示例、Issue、聊天或 Git 提交。JobHunter Pro 不读取 Codex、Claude Code、ChatGPT 等工具自身的 OAuth、Cookie 或登录凭证。
 
 保存后运行：
 
 ```bash
-bosshunter ai-status
+jobhunter_pro ai-status
 ```
 
 只有检测通过后再运行完整流程。

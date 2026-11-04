@@ -6,11 +6,11 @@ from unittest.mock import patch
 
 import pytest
 
-from bosshunter.collection.base import CollectorHooks
-from bosshunter.collection.models import PlatformCollectionRequest
-from bosshunter.collection.orchestrator import CollectionOrchestrator
-from bosshunter.collection.platforms.liepin import LiepinBrowser, LiepinCollector
-from bosshunter.db import get_db, get_collected_combos, get_page_progress, mark_combo_collected, upsert_page_progress
+from jobhunter_pro.collection.base import CollectorHooks
+from jobhunter_pro.collection.models import PlatformCollectionRequest
+from jobhunter_pro.collection.orchestrator import CollectionOrchestrator
+from jobhunter_pro.collection.platforms.liepin import LiepinBrowser, LiepinCollector
+from jobhunter_pro.db import get_db, get_collected_combos, get_page_progress, mark_combo_collected, upsert_page_progress
 
 REQUEST = PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=2)
 JOB = {"source_job_id": "review-job", "title": "AI 工程师", "company": "测试公司", "salary": "15-25K", "url": "https://www.liepin.com/job/1001.shtml"}
@@ -18,7 +18,7 @@ JOB = {"source_job_id": "review-job", "title": "AI 工程师", "company": "测�
 
 @pytest.fixture(autouse=True)
 def safe_timing():
-    with patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True), patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False):
+    with patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True), patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False):
         yield
 
 
@@ -120,7 +120,7 @@ def test_failed_database_save_must_not_mark_combo_complete(tmp_path):
     actual_collector = LiepinCollector
     def factory(**kwargs):
         return actual_collector(**kwargs, browser=browser.surface, sleep=lambda seconds: None, uniform=lambda low, high: 0)
-    with patch("bosshunter.collection.orchestrator.LiepinCollector", side_effect=factory), patch("bosshunter.collection.orchestrator.insert_job_if_new", side_effect=RuntimeError("simulated save failure")):
+    with patch("jobhunter_pro.collection.orchestrator.LiepinCollector", side_effect=factory), patch("jobhunter_pro.collection.orchestrator.insert_job_if_new", side_effect=RuntimeError("simulated save failure")):
         result = CollectionOrchestrator({}, db_path=db_path).run({"platform_order": ["liepin"], "platforms": {"liepin": {"keywords": ["AI"], "cities": ["上海"], "max_pages": 2}}})
     conn = get_db(db_path)
     try:

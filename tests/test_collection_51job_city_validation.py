@@ -7,7 +7,7 @@
 
 import unittest
 
-from bosshunter.collection.orchestrator import normalize_collection_options
+from jobhunter_pro.collection.orchestrator import normalize_collection_options
 
 
 def _options_for_51job(cities, *, city_codes=None):

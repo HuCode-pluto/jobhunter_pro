@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢你对 BossHunter 的关注！欢迎提交 Issue 和 Pull Request。
+感谢你对 JobHunter Pro 的关注！欢迎提交 Issue 和 Pull Request。
 
 ## 行为准则
 
@@ -34,7 +34,7 @@
 
 1. Fork 仓库
 2. 基于 `main` 创建功能分支：`git checkout -b feat/your-feature`
-3. 提交代码，确保 `bosshunter --help` 正常运行
+3. 提交代码，确保 `jobhunter_pro --help` 正常运行
 4. 运行相关测试；涉及前端时同时确认前端可以构建
 5. 推送并创建 Pull Request
 6. 由维护者认领或分配一名推进负责人（Assignee），确认风险等级并请求相应 Review；作者负责实现和回复
@@ -61,7 +61,7 @@ pip install ruff
 ruff check src/
 
 # 运行 CLI
-bosshunter --help
+jobhunter_pro --help
 ```
 
 ## 选择器维护
@@ -76,7 +76,7 @@ bosshunter --help
 
 ## 成为维护者
 
-BossHunter 的正式维护者共同维护整个项目，不划分固定模块或席位；个人擅长方向只用于协作参考，不限制 review 和跟进范围。候选维护者通常先以 `Triage` 权限进入 2–4 周观察期，不会因为项目贡献排名或维护贡献记录自动获得写权限。
+JobHunter Pro 的正式维护者共同维护整个项目，不划分固定模块或席位；个人擅长方向只用于协作参考，不限制 review 和跟进范围。候选维护者通常先以 `Triage` 权限进入 2–4 周观察期，不会因为项目贡献排名或维护贡献记录自动获得写权限。
 
 正式维护者连续 14 天没有可核实的维护活动，且未提前声明暂停或请假，将进入联系确认与权限复核流程。有效活动包括 Review、Issue 闭环、安全复核、发布验证和治理交接；机械评论以及维护者自己的功能 PR 不计作维护活动。
 

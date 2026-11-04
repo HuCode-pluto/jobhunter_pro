@@ -5,13 +5,13 @@ from pathlib import Path
 from threading import Event
 from unittest.mock import MagicMock, call, patch
 
-from bosshunter.db import get_db
-from bosshunter.scraper.jobs import scrape_jobs
-from bosshunter.web.server import _execute_collect
-from bosshunter.web.tasks import WorkbenchTask
-from bosshunter.collection.models import JobCandidate, PlatformCollectionResult
-from bosshunter.collection.orchestrator import CollectionOrchestrator
-from bosshunter.collection.registry import CollectorRegistry
+from jobhunter_pro.db import get_db
+from jobhunter_pro.scraper.jobs import scrape_jobs
+from jobhunter_pro.web.server import _execute_collect
+from jobhunter_pro.web.tasks import WorkbenchTask
+from jobhunter_pro.collection.models import JobCandidate, PlatformCollectionResult
+from jobhunter_pro.collection.orchestrator import CollectionOrchestrator
+from jobhunter_pro.collection.registry import CollectorRegistry
 
 
 class ScraperBackgroundTests(unittest.TestCase):
@@ -47,8 +47,8 @@ class ScraperBackgroundTests(unittest.TestCase):
                 return CollectionOrchestrator(collect_config, db_path=Path(tmp) / "jobs.db",
                                               task_id=kwargs["task_id"], registry=registry)
 
-            with patch("bosshunter.web.server.CollectionOrchestrator", side_effect=orchestrator), \
-                 patch("bosshunter.ai.scorer.score_jobs", side_effect=score_with_progress) as score:
+            with patch("jobhunter_pro.web.server.CollectionOrchestrator", side_effect=orchestrator), \
+                 patch("jobhunter_pro.ai.scorer.score_jobs", side_effect=score_with_progress) as score:
                 _execute_collect(task, config)
 
         score.assert_called_once()
@@ -70,8 +70,8 @@ class ScraperBackgroundTests(unittest.TestCase):
             "_workbench_stop_event": stop_event,
         }
 
-        with patch("bosshunter.scraper.jobs.get_db", return_value=db), \
-             patch("bosshunter.scraper.jobs.new_tab") as new_tab:
+        with patch("jobhunter_pro.scraper.jobs.get_db", return_value=db), \
+             patch("jobhunter_pro.scraper.jobs.new_tab") as new_tab:
             count = scrape_jobs(config, ["AI"])
 
         self.assertEqual(count, 0)
@@ -97,8 +97,8 @@ class ScraperBackgroundTests(unittest.TestCase):
             })
             return (2, 1)
 
-        with patch("bosshunter.scraper.jobs.scrape_jobs", side_effect=scrape_with_progress) as scrape, \
-             patch("bosshunter.ai.scorer.score_jobs", side_effect=score_with_progress):
+        with patch("jobhunter_pro.scraper.jobs.scrape_jobs", side_effect=scrape_with_progress) as scrape, \
+             patch("jobhunter_pro.ai.scorer.score_jobs", side_effect=score_with_progress):
             _execute_collect(task, config)
 
         collection_config = scrape.call_args.args[0]
@@ -131,24 +131,24 @@ class ScraperBackgroundTests(unittest.TestCase):
             "_workbench_collect_progress": updates.append,
         }
 
-        with patch("bosshunter.scraper.jobs.get_db", return_value=db), \
-             patch("bosshunter.collection.platforms.boss.PlatformAccessGuard") as guard_cls, \
-             patch("bosshunter.scraper.jobs.Progress", return_value=progress_context), \
-             patch("bosshunter.scraper.jobs.PageThrottle") as throttle_cls, \
-             patch("bosshunter.scraper.jobs.new_tab", return_value="worker-target"), \
-             patch("bosshunter.scraper.jobs.navigate", return_value=True), \
-             patch("bosshunter.scraper.jobs.evaluate", side_effect=[
+        with patch("jobhunter_pro.scraper.jobs.get_db", return_value=db), \
+             patch("jobhunter_pro.collection.platforms.boss.PlatformAccessGuard") as guard_cls, \
+             patch("jobhunter_pro.scraper.jobs.Progress", return_value=progress_context), \
+             patch("jobhunter_pro.scraper.jobs.PageThrottle") as throttle_cls, \
+             patch("jobhunter_pro.scraper.jobs.new_tab", return_value="worker-target"), \
+             patch("jobhunter_pro.scraper.jobs.navigate", return_value=True), \
+             patch("jobhunter_pro.scraper.jobs.evaluate", side_effect=[
                  json.dumps({"risk": None}), json.dumps({}),  # No custom font sources.
                  False, json.dumps(jobs),
                  json.dumps({"risk": None}), json.dumps(detail),
              ]), \
-             patch("bosshunter.scraper.jobs.wait_for_load"), \
-             patch("bosshunter.scraper.jobs.scroll"), \
-             patch("bosshunter.scraper.jobs.close_tab"), \
-             patch("bosshunter.scraper.jobs.job_exists", side_effect=[True, False]), \
-             patch("bosshunter.scraper.jobs.matching_deal_breaker", return_value=False), \
-             patch("bosshunter.scraper.jobs.insert_job"), \
-             patch("bosshunter.scraper.jobs.time.sleep"):
+             patch("jobhunter_pro.scraper.jobs.wait_for_load"), \
+             patch("jobhunter_pro.scraper.jobs.scroll"), \
+             patch("jobhunter_pro.scraper.jobs.close_tab"), \
+             patch("jobhunter_pro.scraper.jobs.job_exists", side_effect=[True, False]), \
+             patch("jobhunter_pro.scraper.jobs.matching_deal_breaker", return_value=False), \
+             patch("jobhunter_pro.scraper.jobs.insert_job"), \
+             patch("jobhunter_pro.scraper.jobs.time.sleep"):
             throttle_cls.return_value.wait.return_value = None
             guard_cls.return_value.ensure_unlocked.return_value = None
             count = scrape_jobs(config, ["AI"], collected_job_ids=collected_job_ids)
@@ -188,30 +188,30 @@ class ScraperBackgroundTests(unittest.TestCase):
             "search": {"max_pages": 1},
         }
 
-        with patch("bosshunter.scraper.jobs.get_db", return_value=db), \
-             patch("bosshunter.collection.platforms.boss.PlatformAccessGuard") as guard_cls, \
-             patch("bosshunter.scraper.jobs.Progress", return_value=progress_context), \
-             patch("bosshunter.scraper.jobs.PageThrottle") as throttle_cls, \
+        with patch("jobhunter_pro.scraper.jobs.get_db", return_value=db), \
+             patch("jobhunter_pro.collection.platforms.boss.PlatformAccessGuard") as guard_cls, \
+             patch("jobhunter_pro.scraper.jobs.Progress", return_value=progress_context), \
+             patch("jobhunter_pro.scraper.jobs.PageThrottle") as throttle_cls, \
              patch(
-                 "bosshunter.scraper.jobs.new_tab",
+                 "jobhunter_pro.scraper.jobs.new_tab",
                  return_value="worker-target",
              ) as new_tab, \
-             patch("bosshunter.scraper.jobs.navigate", return_value=True) as navigate, \
+             patch("jobhunter_pro.scraper.jobs.navigate", return_value=True) as navigate, \
              patch(
-                 "bosshunter.scraper.jobs.evaluate",
+                 "jobhunter_pro.scraper.jobs.evaluate",
                  side_effect=[
                      json.dumps({"risk": None}), json.dumps({}),  # No custom font sources.
                      False, json.dumps(jobs),
                      json.dumps({"risk": None}), json.dumps(detail),
                  ],
              ), \
-             patch("bosshunter.scraper.jobs.wait_for_load"), \
-             patch("bosshunter.scraper.jobs.scroll"), \
-             patch("bosshunter.scraper.jobs.close_tab"), \
-             patch("bosshunter.scraper.jobs.job_exists", return_value=False), \
-             patch("bosshunter.scraper.jobs.matching_deal_breaker", return_value=False), \
-             patch("bosshunter.scraper.jobs.insert_job"), \
-             patch("bosshunter.scraper.jobs.time.sleep"):
+             patch("jobhunter_pro.scraper.jobs.wait_for_load"), \
+             patch("jobhunter_pro.scraper.jobs.scroll"), \
+             patch("jobhunter_pro.scraper.jobs.close_tab"), \
+             patch("jobhunter_pro.scraper.jobs.job_exists", return_value=False), \
+             patch("jobhunter_pro.scraper.jobs.matching_deal_breaker", return_value=False), \
+             patch("jobhunter_pro.scraper.jobs.insert_job"), \
+             patch("jobhunter_pro.scraper.jobs.time.sleep"):
             throttle_cls.return_value.wait.return_value = None
             guard_cls.return_value.ensure_unlocked.return_value = None
             count = scrape_jobs(config, ["AI"])

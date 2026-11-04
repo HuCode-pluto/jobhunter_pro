@@ -7,7 +7,7 @@ import unittest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LAUNCHER = REPO_ROOT / "scripts" / "macos" / "start_bosshunter.sh"
+LAUNCHER = REPO_ROOT / "scripts" / "macos" / "start_jobhunter_pro.sh"
 INSTALLER = REPO_ROOT / "scripts" / "macos" / "install_launcher.command"
 
 
@@ -16,9 +16,9 @@ class MacOSLauncherTests(unittest.TestCase):
 		text = LAUNCHER.read_text(encoding="utf-8")
 		self.assertIn("#!/bin/bash", text)
 		self.assertIn("BASH_SOURCE", text)
-		self.assertIn("bosshunter.main", text)
+		self.assertIn("jobhunter_pro.main", text)
 		self.assertIn("--python-path", text)
-		self.assertIn("command -v bosshunter", text)
+		self.assertIn("command -v jobhunter_pro", text)
 		self.assertIn("remote-debugging-port=9222", text)
 		self.assertIn("--user-data-dir", text)
 		self.assertIn("http://127.0.0.1:8686", text)
@@ -29,16 +29,16 @@ class MacOSLauncherTests(unittest.TestCase):
 		self.assertNotIn("$RUNNER $RUNNER_PREFIX", text)
 		self.assertNotIn("shellcheck disable=SC2086", text)
 		# Dedicated profile is mandatory: Chrome 136+ blocks debug ports on it.
-		self.assertIn(".bosshunter-chrome", text)
+		self.assertIn(".jobhunter_pro-chrome", text)
 		self.assertNotIn("/Users/pikachu", text)
 
 	def test_installer_creates_a_double_click_entry(self):
 		text = INSTALLER.read_text(encoding="utf-8")
 		self.assertIn("#!/bin/bash", text)
 		self.assertIn("BASH_SOURCE", text)
-		self.assertIn("start_bosshunter.sh", text)
+		self.assertIn("start_jobhunter_pro.sh", text)
 		self.assertIn("$HOME/Desktop", text)
-		self.assertIn("BossHunter.command", text)
+		self.assertIn("JobHunter Pro.command", text)
 		self.assertIn("chmod +x", text)
 		self.assertNotIn("/Users/pikachu", text)
 
@@ -86,7 +86,7 @@ class MacOSLauncherTests(unittest.TestCase):
 			self.assertIn("--no-open", calls)
 			self.assertEqual(calls.count("web"), 1)
 			self.assertEqual(calls.count("-m"), 2)
-			self.assertEqual(calls.count("bosshunter.main"), 2)
+			self.assertEqual(calls.count("jobhunter_pro.main"), 2)
 			self.assertEqual(calls.count(resolved_python), 2)
 
 	@staticmethod

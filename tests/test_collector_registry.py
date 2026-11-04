@@ -1,6 +1,6 @@
 import unittest
 
-from bosshunter.collection.registry import CollectorRegistry
+from jobhunter_pro.collection.registry import CollectorRegistry
 
 
 class _StubCollector:

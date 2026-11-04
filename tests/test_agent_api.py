@@ -1,7 +1,7 @@
 import unittest
 
-from bosshunter.agent_api import AgentRequestError, agent_preferences, apply_preferences
-from bosshunter.config import load_config
+from jobhunter_pro.agent_api import AgentRequestError, agent_preferences, apply_preferences
+from jobhunter_pro.config import load_config
 
 
 class AgentPreferencesTests(unittest.TestCase):

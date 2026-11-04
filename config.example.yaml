@@ -1,4 +1,4 @@
-# BossHunter 配置文件
+# JobHunter Pro 配置文件
 # 复制此文件为 config.yaml 并修改为你的实际配置
 
 profile:
@@ -60,7 +60,7 @@ platforms:
     search:
       keywords: []
       cities: []
-      # 只需填写城市名称；BossHunter 会从内置智联目录自动匹配城市编码。
+      # 只需填写城市名称；JobHunter Pro 会从内置智联目录自动匹配城市编码。
       city_codes: {}
       max_pages: 3
       sort: default
@@ -79,7 +79,7 @@ platforms:
     search:
       keywords: []
       cities: []
-      # 只需填写城市名称；BossHunter 会从内置猎聘目录自动匹配城市编码。
+      # 只需填写城市名称；JobHunter Pro 会从内置猎聘目录自动匹配城市编码。
       city_codes: {}
       max_pages: 1
       sort: default

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from bosshunter.db import (
+from jobhunter_pro.db import (
     delete_page_progress,
     get_collected_combos,
     get_db,

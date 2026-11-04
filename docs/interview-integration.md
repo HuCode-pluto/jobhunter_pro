@@ -1,8 +1,8 @@
 # 可选的本地面试准备
 
-此功能将选定岗位交给面试工具，不改变 BossHunter 的采集、确认、投递或监测流程，也不标记岗位“已发送”。无需安装面试工具即可导出 JD；直接联通目前是关联功能 PR 中的配套协议，不代表已有版本均已支持。
+此功能将选定岗位交给面试工具，不改变 JobHunter Pro 的采集、确认、投递或监测流程，也不标记岗位“已发送”。无需安装面试工具即可导出 JD；直接联通目前是关联功能 PR 中的配套协议，不代表已有版本均已支持。
 
-配套接收实现：[Interview Sim PR #1](https://github.com/miaomiao636/interview-sim/pull/1)，测试分支为 `feat/bosshunter-job-handoff`。在接收端正式合并/发布前，测试者需检出该分支并按其快速开始安装；普通用户可继续使用 Markdown，不必替换已有稳定安装。上游提案见 [BossHunter #216](https://github.com/shengjidaguai-china/BossHunter/issues/216)。
+配套接收实现：[Interview Sim PR #1](https://github.com/miaomiao636/interview-sim/pull/1)，测试分支为 `feat/jobhunter_pro-job-handoff`。在接收端正式合并/发布前，测试者需检出该分支并按其快速开始安装；普通用户可继续使用 Markdown，不必替换已有稳定安装。上游提案见 [JobHunter Pro #216](https://github.com/shengjidaguai-china/JobHunter Pro/issues/216)。
 
 ## 用法
 
@@ -18,7 +18,7 @@
 
 - 仅支持 `http://127.0.0.1:端口` / `http://localhost:端口` 的根地址，端口范围 1–65535，不含默认 80。不支持 HTTPS、IPv6、路径、参数、凭据、域名或局域网地址。两端的 origin 必须不同。
 - 默认填入 `http://127.0.0.1:8800` 只是示例；端口被占用时应使用面试服务实际输出的地址。`localhost` 与 `127.0.0.1` 属于不同 origin，不能依赖跳转来替换。
-- 地址只保存在当前 BossHunter 浏览器的本地设置中，岗位内容不写入浏览器持久存储。
+- 地址只保存在当前 JobHunter Pro 浏览器的本地设置中，岗位内容不写入浏览器持久存储。
 - 新标签页被拦截：允许本地站点打开弹窗后再试。
 - 15 秒未收到确认：检查是否启动服务、是否使用支持交接的版本、是否填对地址；先核对新页是否已有草稿，避免重复保存。可以停止等待或使用 Markdown 降级。
 - JD 超过 15,000 个 JavaScript 字符，或结构字段超限：直接交接会拒绝，不截断；Markdown 仍保留完整原文。
@@ -53,7 +53,7 @@
 
 ```bash
 node --experimental-strip-types --test tests/js/interview_handoff.test.ts
-npm --prefix src/bosshunter/web/frontend run build
+npm --prefix src/jobhunter_pro/web/frontend run build
 node tests/browser/interview-handoff.cjs
 ```
 

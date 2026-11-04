@@ -2,24 +2,24 @@ import json
 from unittest import TestCase
 from unittest.mock import patch
 
-from bosshunter.collection.base import CollectorHooks
-from bosshunter.collection.models import PlatformCollectionRequest
-from bosshunter.collection.orchestrator import normalize_collection_options
-from bosshunter.collection.platforms.liepin import (
+from jobhunter_pro.collection.base import CollectorHooks
+from jobhunter_pro.collection.models import PlatformCollectionRequest
+from jobhunter_pro.collection.orchestrator import normalize_collection_options
+from jobhunter_pro.collection.platforms.liepin import (
     JS_EXTRACT_DETAIL,
     JS_EXTRACT_LIST,
     LiepinBrowser,
     LiepinCollector,
     get_liepin_city_code,
 )
-from bosshunter.collection.text import clean_job_description
+from jobhunter_pro.collection.text import clean_job_description
 
 
 class LiepinCollectorTests(TestCase):
     def setUp(self):
         self._patches = [
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
         ]
         for p in self._patches:
             p.start()
@@ -440,7 +440,7 @@ class LiepinEnhancedTests(TestCase):
     def test_outside_send_window_skips_collection(self):
         browser = self._browser_with_list([])
         collector = LiepinCollector(browser=browser)
-        with patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=False):
+        with patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=False):
             result = collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=1),
                 self._hooks(),
@@ -452,8 +452,8 @@ class LiepinEnhancedTests(TestCase):
         browser = self._browser_with_list([])
         collector = LiepinCollector(browser=browser)
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=True),
         ):
             result = collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=1),
@@ -472,8 +472,8 @@ class LiepinEnhancedTests(TestCase):
             config={"profile": {"deal_breakers": ["外包"]}},
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
         ):
             result = collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=1),
@@ -492,8 +492,8 @@ class LiepinEnhancedTests(TestCase):
             config={"profile": {"blocked_companies": ["黑名单公司"]}},
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
         ):
             collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=1),
@@ -511,8 +511,8 @@ class LiepinEnhancedTests(TestCase):
             config={"profile": {"allow_internship": False}},
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
         ):
             collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=1),
@@ -530,8 +530,8 @@ class LiepinEnhancedTests(TestCase):
             config={"profile": {"allow_internship": True}},
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
         ):
             collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=1),
@@ -548,8 +548,8 @@ class LiepinEnhancedTests(TestCase):
             browser=browser, sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
         ):
             collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=1),
@@ -575,8 +575,8 @@ class LiepinEnhancedTests(TestCase):
             config={"profile": {"salary_min": 10, "salary_max": 20}},
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
         ):
             collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=1),
@@ -597,8 +597,8 @@ class LiepinEnhancedTests(TestCase):
             config={"profile": {"salary_min": 10, "salary_max": 20}},
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
         ):
             collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=1),
@@ -646,15 +646,15 @@ class LiepinResumeCheckpointTests(TestCase):
     def _resume_patches(self, collected_combos=None, saved_page=0):
         collected_combos = collected_combos if collected_combos is not None else set()
         return (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.liepin.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.liepin.prune_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.get_collected_combos", return_value=collected_combos),
-            patch("bosshunter.collection.platforms.liepin.get_page_progress", return_value=saved_page),
-            patch("bosshunter.collection.platforms.liepin.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.mark_combo_collected"),
-            patch("bosshunter.collection.platforms.liepin.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.get_collected_combos", return_value=collected_combos),
+            patch("jobhunter_pro.collection.platforms.liepin.get_page_progress", return_value=saved_page),
+            patch("jobhunter_pro.collection.platforms.liepin.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.mark_combo_collected"),
+            patch("jobhunter_pro.collection.platforms.liepin.delete_page_progress"),
         )
 
     def test_completed_combo_skipped_entirely(self):
@@ -668,15 +668,15 @@ class LiepinResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.liepin.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.liepin.prune_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.get_collected_combos", return_value={("上海", "AI")}),
-            patch("bosshunter.collection.platforms.liepin.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.liepin.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.mark_combo_collected"),
-            patch("bosshunter.collection.platforms.liepin.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.get_collected_combos", return_value={("上海", "AI")}),
+            patch("jobhunter_pro.collection.platforms.liepin.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.liepin.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.mark_combo_collected"),
+            patch("jobhunter_pro.collection.platforms.liepin.delete_page_progress"),
         ):
             result = collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=1),
@@ -699,15 +699,15 @@ class LiepinResumeCheckpointTests(TestCase):
         navigation_urls = []
         browser.navigate_action = lambda _t, url: navigation_urls.append(url) or True
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.liepin.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.liepin.prune_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.liepin.get_page_progress", return_value=2),
-            patch("bosshunter.collection.platforms.liepin.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.mark_combo_collected"),
-            patch("bosshunter.collection.platforms.liepin.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.liepin.get_page_progress", return_value=2),
+            patch("jobhunter_pro.collection.platforms.liepin.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.mark_combo_collected"),
+            patch("jobhunter_pro.collection.platforms.liepin.delete_page_progress"),
         ):
             result = collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=4),
@@ -727,16 +727,16 @@ class LiepinResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.liepin.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.liepin.prune_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.liepin.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.liepin.upsert_page_progress",
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.liepin.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.liepin.upsert_page_progress",
                   side_effect=lambda _c, _s, _ci, _k, page: checkpoints.append(page)),
-            patch("bosshunter.collection.platforms.liepin.mark_combo_collected"),
-            patch("bosshunter.collection.platforms.liepin.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.mark_combo_collected"),
+            patch("jobhunter_pro.collection.platforms.liepin.delete_page_progress"),
         ):
             result = collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=3),
@@ -755,15 +755,15 @@ class LiepinResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.liepin.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.liepin.prune_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.liepin.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.liepin.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.mark_combo_collected") as mark_complete,
-            patch("bosshunter.collection.platforms.liepin.delete_page_progress") as delete_progress,
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.liepin.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.liepin.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.mark_combo_collected") as mark_complete,
+            patch("jobhunter_pro.collection.platforms.liepin.delete_page_progress") as delete_progress,
         ):
             result = collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=2),
@@ -786,15 +786,15 @@ class LiepinResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.liepin.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.liepin.prune_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.liepin.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.liepin.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.mark_combo_collected") as mark_complete,
-            patch("bosshunter.collection.platforms.liepin.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.liepin.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.liepin.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.mark_combo_collected") as mark_complete,
+            patch("jobhunter_pro.collection.platforms.liepin.delete_page_progress"),
         ):
             result = collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=3),
@@ -814,15 +814,15 @@ class LiepinResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.liepin.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.liepin.prune_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.liepin.get_page_progress", return_value=5),
-            patch("bosshunter.collection.platforms.liepin.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.mark_combo_collected") as mark_complete,
-            patch("bosshunter.collection.platforms.liepin.delete_page_progress") as delete_progress,
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.liepin.get_page_progress", return_value=5),
+            patch("jobhunter_pro.collection.platforms.liepin.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.mark_combo_collected") as mark_complete,
+            patch("jobhunter_pro.collection.platforms.liepin.delete_page_progress") as delete_progress,
         ):
             result = collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=3),
@@ -844,15 +844,15 @@ class LiepinResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.liepin.prune_collected_combos") as prune_combos,
-            patch("bosshunter.collection.platforms.liepin.prune_page_progress") as prune_pages,
-            patch("bosshunter.collection.platforms.liepin.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.liepin.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.liepin.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.liepin.mark_combo_collected"),
-            patch("bosshunter.collection.platforms.liepin.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_collected_combos") as prune_combos,
+            patch("jobhunter_pro.collection.platforms.liepin.prune_page_progress") as prune_pages,
+            patch("jobhunter_pro.collection.platforms.liepin.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.liepin.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.liepin.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.liepin.mark_combo_collected"),
+            patch("jobhunter_pro.collection.platforms.liepin.delete_page_progress"),
         ):
             collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=2),
@@ -897,13 +897,13 @@ class LiepinResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.liepin.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.liepin.prune_collected_combos") as prune_combos,
-            patch("bosshunter.collection.platforms.liepin.get_collected_combos") as get_combos,
-            patch("bosshunter.collection.platforms.liepin.get_page_progress") as get_progress,
-            patch("bosshunter.collection.platforms.liepin.upsert_page_progress") as upsert,
-            patch("bosshunter.collection.platforms.liepin.mark_combo_collected") as mark,
+            patch("jobhunter_pro.collection.platforms.liepin.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.liepin.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.liepin.prune_collected_combos") as prune_combos,
+            patch("jobhunter_pro.collection.platforms.liepin.get_collected_combos") as get_combos,
+            patch("jobhunter_pro.collection.platforms.liepin.get_page_progress") as get_progress,
+            patch("jobhunter_pro.collection.platforms.liepin.upsert_page_progress") as upsert,
+            patch("jobhunter_pro.collection.platforms.liepin.mark_combo_collected") as mark,
         ):
             result = collector.collect(
                 PlatformCollectionRequest("liepin", ["AI"], ["上海"], {"上海": "020"}, max_pages=2),

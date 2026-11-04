@@ -8,7 +8,7 @@ import unittest
 from itertools import islice
 from pathlib import Path
 
-from bosshunter.web.resume_names import (
+from jobhunter_pro.web.resume_names import (
 	iter_resume_name_candidates,
 	resolve_active_resume_path,
 	select_resume_markdown_filename,

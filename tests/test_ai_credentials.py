@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from bosshunter.ai import credentials
+from jobhunter_pro.ai import credentials
 
 
 class AnthropicCredentialTests(unittest.TestCase):
@@ -172,7 +172,7 @@ class AnthropicCredentialTests(unittest.TestCase):
         fake_client = SimpleNamespace(trust_env=False, close=lambda: None)
         with (
             patch.dict("os.environ", {"HTTP_PROXY": "http://127.0.0.1:7897"}, clear=True),
-            patch("bosshunter.ai.credentials.httpx.Client", return_value=fake_client) as client_ctor,
+            patch("jobhunter_pro.ai.credentials.httpx.Client", return_value=fake_client) as client_ctor,
         ):
             result = credentials.build_anthropic_client_kwargs({"ai": {"api_key": "from-config"}})
 
@@ -480,7 +480,7 @@ class AnthropicCredentialTests(unittest.TestCase):
         }
         with (
             patch.dict("os.environ", {"DEEPSEEK_API_KEY": "deepseek-secret"}, clear=True),
-            patch("bosshunter.ai.credentials.httpx.post", return_value=CompletionResponse()) as post,
+            patch("jobhunter_pro.ai.credentials.httpx.post", return_value=CompletionResponse()) as post,
         ):
             result = credentials.call_openai_compatible_text("prompt", config, 123)
 
@@ -514,8 +514,8 @@ class AnthropicCredentialTests(unittest.TestCase):
         }
         with (
             patch.dict("os.environ", {"DEEPSEEK_API_KEY": "deepseek-secret"}, clear=True),
-            patch("bosshunter.ai.credentials.httpx.get", return_value=ModelsResponse()) as models_get,
-            patch("bosshunter.ai.credentials.httpx.post", return_value=CompletionResponse()) as post,
+            patch("jobhunter_pro.ai.credentials.httpx.get", return_value=ModelsResponse()) as models_get,
+            patch("jobhunter_pro.ai.credentials.httpx.post", return_value=CompletionResponse()) as post,
         ):
             result = credentials.call_openai_compatible_text("prompt", config, 123)
 
@@ -541,7 +541,7 @@ class AnthropicCredentialTests(unittest.TestCase):
         }
         with (
             patch.dict("os.environ", {"DEEPSEEK_API_KEY": "deepseek-secret"}, clear=True),
-            patch("bosshunter.ai.credentials.httpx.post", return_value=CompletionResponse()) as post,
+            patch("jobhunter_pro.ai.credentials.httpx.post", return_value=CompletionResponse()) as post,
         ):
             credentials.call_openai_compatible_text("prompt", config, 8)
 
@@ -567,7 +567,7 @@ class AnthropicCredentialTests(unittest.TestCase):
         }
         with (
             patch.dict("os.environ", {}, clear=True),
-            patch("bosshunter.ai.credentials.httpx.post", return_value=CompletionResponse()) as post,
+            patch("jobhunter_pro.ai.credentials.httpx.post", return_value=CompletionResponse()) as post,
         ):
             credentials.call_openai_compatible_text("prompt", config, 8)
 
@@ -600,7 +600,7 @@ class AnthropicCredentialTests(unittest.TestCase):
         }
         with (
             patch.dict("os.environ", {"DEEPSEEK_API_KEY": "deepseek-secret"}, clear=True),
-            patch("bosshunter.ai.credentials.httpx.post", return_value=CompletionResponse()),
+            patch("jobhunter_pro.ai.credentials.httpx.post", return_value=CompletionResponse()),
         ):
             result = credentials.call_openai_compatible_text("prompt", config, 123)
 
@@ -632,7 +632,7 @@ class AnthropicCredentialTests(unittest.TestCase):
         }
         with (
             patch.dict("os.environ", {"DEEPSEEK_API_KEY": "deepseek-secret"}, clear=True),
-            patch("bosshunter.ai.credentials.httpx.post", return_value=CompletionResponse()),
+            patch("jobhunter_pro.ai.credentials.httpx.post", return_value=CompletionResponse()),
             self.assertRaises(credentials.AIRequestError) as raised,
         ):
             credentials.call_openai_compatible_text("prompt", config, 123)
@@ -659,7 +659,7 @@ class AnthropicCredentialTests(unittest.TestCase):
         }
         with (
             patch.dict("os.environ", {"DEEPSEEK_API_KEY": "deepseek-secret"}, clear=True),
-            patch("bosshunter.ai.credentials.httpx.post", return_value=EmptyChoicesResponse()),
+            patch("jobhunter_pro.ai.credentials.httpx.post", return_value=EmptyChoicesResponse()),
             self.assertRaises(credentials.AIRequestError) as raised,
         ):
             credentials.call_openai_compatible_text("prompt", config, 256)
@@ -723,7 +723,7 @@ class AnthropicCredentialTests(unittest.TestCase):
         with (
             patch.dict("os.environ", {"DEEPSEEK_API_KEY": "deepseek-secret"}, clear=True),
             patch(
-                "bosshunter.ai.credentials.httpx.post",
+                "jobhunter_pro.ai.credentials.httpx.post",
                 side_effect=[UnsupportedThinkingResponse(), CompletionResponse()],
             ) as post,
         ):
@@ -763,7 +763,7 @@ class AnthropicCredentialTests(unittest.TestCase):
                     json={"choices": [{"finish_reason": "stop", "message": {"content": "score result"}}]},
                 )
                 with patch(
-                    "bosshunter.ai.credentials.httpx.post", side_effect=[rejected, success],
+                    "jobhunter_pro.ai.credentials.httpx.post", side_effect=[rejected, success],
                 ) as post:
                     result = credentials.call_anthropic_text("full scoring prompt", config, 8192, purpose="scoring")
 
@@ -797,7 +797,7 @@ class AnthropicCredentialTests(unittest.TestCase):
         ):
             with self.subTest(status=status):
                 response = httpx.Response(status, request=request, json={"error": {"message": message}})
-                with patch("bosshunter.ai.credentials.httpx.post", return_value=response) as post:
+                with patch("jobhunter_pro.ai.credentials.httpx.post", return_value=response) as post:
                     with self.assertRaises(credentials.AIRequestError) as raised:
                         credentials.call_openai_compatible_text("prompt", config, 8192)
                 self.assertEqual(post.call_count, 1)
@@ -825,7 +825,7 @@ class AnthropicCredentialTests(unittest.TestCase):
         }
         with (
             patch.dict("os.environ", {"DEEPSEEK_API_KEY": "deepseek-secret"}, clear=True),
-            patch("bosshunter.ai.credentials.httpx.post", return_value=CompletionResponse()) as post,
+            patch("jobhunter_pro.ai.credentials.httpx.post", return_value=CompletionResponse()) as post,
         ):
             result = credentials.call_openai_compatible_text("prompt", config, 256)
 

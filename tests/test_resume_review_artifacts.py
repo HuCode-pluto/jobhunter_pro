@@ -3,12 +3,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from bosshunter.db import get_db
+from jobhunter_pro.db import get_db
 
 
 class ResumeMasterPolicyTests(unittest.TestCase):
     def test_generated_target_header_is_removed_without_touching_experience(self):
-        from bosshunter.ai.resume import _remove_generated_target_header
+        from jobhunter_pro.ai.resume import _remove_generated_target_header
 
         source = (
             "# 候选人\n\n北京｜candidate@example.com\n\n"
@@ -24,7 +24,7 @@ class ResumeMasterPolicyTests(unittest.TestCase):
         self.assertEqual(_remove_generated_target_header(result), result)
 
     def test_full_jd_reaches_generation_prompt(self):
-        from bosshunter.ai.resume import _build_resume_prompt
+        from jobhunter_pro.ai.resume import _build_resume_prompt
 
         jd = "岗位介绍。" * 500 + "必须提供小红书运营案例。"
         prompt = _build_resume_prompt(
@@ -37,7 +37,7 @@ class ResumeMasterPolicyTests(unittest.TestCase):
         self.assertNotIn("求职方向：新媒体运营负责人｜招聘公司", prompt)
 
     def test_case_section_projects_cannot_be_silently_dropped(self):
-        from bosshunter.ai.resume import _find_project_preservation_issues
+        from jobhunter_pro.ai.resume import _find_project_preservation_issues
 
         source = "## 代表性AI传播案例\n### 社媒账号\n- 内容运营。\n### 开源社区\n- 社区协作。\n"
         candidate = "## 项目经历\n### 社媒账号\n- 内容运营。\n"
@@ -47,11 +47,11 @@ class ResumeMasterPolicyTests(unittest.TestCase):
         self.assertTrue(any("开源社区" in issue for issue in issues))
 
     def test_project_order_can_change_without_triggering_deletion(self):
-        from bosshunter.ai.resume import _find_project_preservation_issues
+        from jobhunter_pro.ai.resume import _find_project_preservation_issues
 
         source = """# 候选人
 ## 项目经历
-### BossHunter｜AI 产品经理
+### JobHunter Pro｜AI 产品经理
 - 完成真实发送验证。
 ### 设备知识问答 Agent｜产品经理
 - 完成检索评测。
@@ -60,23 +60,23 @@ class ResumeMasterPolicyTests(unittest.TestCase):
 ## 项目经历
 ### 设备知识问答 Agent｜产品经理
 - 完成检索评测。
-### BossHunter｜AI 产品经理
+### JobHunter Pro｜AI 产品经理
 - 完成真实发送验证。
 """
 
         self.assertEqual(_find_project_preservation_issues(reordered, source), [])
 
     def test_missing_master_project_is_blocked(self):
-        from bosshunter.ai.resume import _find_project_preservation_issues
+        from jobhunter_pro.ai.resume import _find_project_preservation_issues
 
         source = """## 项目经历
-### BossHunter｜AI 产品经理
+### JobHunter Pro｜AI 产品经理
 - 完成真实发送验证。
 ### 设备知识问答 Agent｜产品经理
 - 完成检索评测。
 """
         candidate = """## 项目经历
-### BossHunter｜AI 产品经理
+### JobHunter Pro｜AI 产品经理
 - 完成真实发送验证。
 """
 
@@ -86,7 +86,7 @@ class ResumeMasterPolicyTests(unittest.TestCase):
         self.assertTrue(any("设备知识问答 Agent" in issue for issue in issues))
 
     def test_recruiter_placeholder_company_is_removed(self):
-        from bosshunter.ai.resume import _remove_recruiter_company_references
+        from jobhunter_pro.ai.resume import _remove_recruiter_company_references
 
         result = _remove_recruiter_company_references(
             "# 张三\n\n求职方向：AI 产品经理｜某大型互联网公司\n\n## 教育经历\n本科\n",
@@ -97,7 +97,7 @@ class ResumeMasterPolicyTests(unittest.TestCase):
         self.assertIn("AI 产品经理", result)
 
     def test_image_html_has_fixed_sheet_and_end_marker(self):
-        from bosshunter.ai.resume import _resume_html
+        from jobhunter_pro.ai.resume import _resume_html
 
         rendered = _resume_html("# 张三\n\n## 教育经历\n本科\n", image_mode=True)
 
@@ -106,12 +106,12 @@ class ResumeMasterPolicyTests(unittest.TestCase):
         self.assertIn("width: 210mm", rendered)
         self.assertIn("min-height: 297mm", rendered)
 
-    @patch("bosshunter.ai.resume.close_tab")
-    @patch("bosshunter.ai.resume.screenshot")
-    @patch("bosshunter.ai.resume.evaluate")
-    @patch("bosshunter.ai.resume.new_tab")
+    @patch("jobhunter_pro.ai.resume.close_tab")
+    @patch("jobhunter_pro.ai.resume.screenshot")
+    @patch("jobhunter_pro.ai.resume.evaluate")
+    @patch("jobhunter_pro.ai.resume.new_tab")
     def test_png_render_requires_complete_a4_sheet(self, new_tab, evaluate, screenshot, close_tab):
-        from bosshunter.ai.resume import _render_png_via_cdp
+        from jobhunter_pro.ai.resume import _render_png_via_cdp
 
         new_tab.return_value = "target-1"
         evaluate.return_value = {"width": 794, "height": 1123, "endInside": True}
@@ -133,7 +133,7 @@ class ResumeMasterPolicyTests(unittest.TestCase):
 class ResumeSchemaTests(unittest.TestCase):
     def test_review_columns_are_migrated(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db = get_db(Path(tmp) / "bosshunter.db")
+            db = get_db(Path(tmp) / "jobhunter_pro.db")
             try:
                 columns = {row[1] for row in db.execute("PRAGMA table_info(jobs)").fetchall()}
             finally:

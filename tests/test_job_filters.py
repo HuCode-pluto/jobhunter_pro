@@ -1,7 +1,7 @@
 import unittest
 
-from bosshunter.ai.prefilter import quick_score
-from bosshunter.job_filters import (
+from jobhunter_pro.ai.prefilter import quick_score
+from jobhunter_pro.job_filters import (
     matching_blocked_company,
     matching_deal_breaker,
     parse_monthly_salary_k,

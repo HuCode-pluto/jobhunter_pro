@@ -1,4 +1,4 @@
-# BossHunter 维护任务指引
+# JobHunter Pro 维护任务指引
 
 处理代码或 PR 前阅读根目录的 [GOVERNANCE.md](../GOVERNANCE.md)、[MAINTAINERS.md](../MAINTAINERS.md) 和 [CONTRIBUTING.md](../CONTRIBUTING.md)。保护人工确认、发送限制和用户隐私，不在输出中泄露凭据，不为维护任务启动求职采集或投递。
 

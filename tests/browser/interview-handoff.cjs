@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
 const root = path.resolve(__dirname, '../..');
-const buildDir = process.env.BROWSER_BUILD_DIR || path.join(root, 'src/bosshunter/web/frontend/dist');
+const buildDir = process.env.BROWSER_BUILD_DIR || path.join(root, 'src/jobhunter_pro/web/frontend/dist');
 const artifactDir = path.join(root, 'output/playwright');
 const job = {
   id: 'interview-fixture-job', source_platform: 'boss', title: '合成测试岗位',
@@ -180,7 +180,7 @@ const settle = page => page.evaluate(() => new Promise(resolve => requestAnimati
       await address().fill(invalid);
       assert.equal(await consent().isChecked(), false, 'changing target resets consent');
       await consent().check(); await send().click();
-      await panel.getByRole('status').filter({ hasText: /只支持|不能是 BossHunter/ }).waitFor();
+      await panel.getByRole('status').filter({ hasText: /只支持|不能是 JobHunter Pro/ }).waitFor();
     }
     assert.equal(popupCount, 0, 'invalid targets must not open a tab');
     page.off('popup', countPopup);
@@ -238,7 +238,7 @@ const settle = page => page.evaluate(() => new Promise(resolve => requestAnimati
       await page.screenshot({ path: path.join(artifactDir, `interview-handoff-${width}.png`) });
     }
     results.push('handoff panel and essential controls fit at 1440px, 1024px, 768px and 320px');
-    assert.deepEqual(writes, [], 'handoff must not mutate BossHunter jobs or start a task');
+    assert.deepEqual(writes, [], 'handoff must not mutate JobHunter Pro jobs or start a task');
     assert.deepEqual(externalRequests, [], 'tests may not request any external origin');
     assert.deepEqual(errors, [], 'all pages must have no runtime or console errors');
     const report = { results, pageErrors: errors, externalRequests, writes, allData: 'synthetic, isolated local HTTP only' };

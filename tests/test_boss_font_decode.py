@@ -5,9 +5,9 @@ import json
 import unittest
 from unittest import TestCase
 
-from bosshunter.collection.platforms import boss as boss_module
-from bosshunter.collection.platforms import boss_font
-from bosshunter.collection.platforms.boss import decode_boss_text, install_boss_digit_map
+from jobhunter_pro.collection.platforms import boss as boss_module
+from jobhunter_pro.collection.platforms import boss_font
+from jobhunter_pro.collection.platforms.boss import decode_boss_text, install_boss_digit_map
 
 try:
     from fontTools.fontBuilder import FontBuilder
@@ -60,7 +60,7 @@ def _build_font(digit_shapes, pua_assignments, *, include_ascii=True, woff2=True
     builder.setupGlyf(glyphs)
     builder.setupHorizontalMetrics({name: (600, 50) for name in names})
     builder.setupHorizontalHeader(ascent=800, descent=-200)
-    builder.setupNameTable({"familyName": "BossHunterTest", "styleName": "Regular"})
+    builder.setupNameTable({"familyName": "JobHunter ProTest", "styleName": "Regular"})
     builder.setupOS2()
     builder.setupPost()
     buffer = io.BytesIO()

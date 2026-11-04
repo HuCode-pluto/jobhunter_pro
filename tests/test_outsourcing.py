@@ -5,14 +5,14 @@ from unittest.mock import patch
 
 import pytest
 
-from bosshunter.db import (
+from jobhunter_pro.db import (
     add_history,
     get_db,
     insert_job_if_new,
     recompute_outsourcing,
     serialize_job,
 )
-from bosshunter.outsourcing import (
+from jobhunter_pro.outsourcing import (
     _match_company_strict,
     compute_outsourcing_columns,
     load_rules,
@@ -109,7 +109,7 @@ def test_new_rows_store_real_timestamps_and_preserve_duplicate_rows(tmp_path):
 
 def test_first_migration_and_main_error_columns_coexist(tmp_path):
     db_path = tmp_path / 'legacy.db'
-    with patch('bosshunter.db._migrate_outsourcing'):
+    with patch('jobhunter_pro.db._migrate_outsourcing'):
         conn = get_db(db_path)
     conn.execute("INSERT INTO jobs(id,title,company,status) VALUES('old','测试岗位','中软国际有限公司','sent')")
     conn.commit()
@@ -174,7 +174,7 @@ def test_refresh_rolls_back_as_a_batch_when_computation_fails(tmp_path):
                 raise RuntimeError('synthetic refresh failure')
             return real_compute(job, active_rules)
 
-        with patch('bosshunter.db.compute_outsourcing_columns', side_effect=compute):
+        with patch('jobhunter_pro.db.compute_outsourcing_columns', side_effect=compute):
             with pytest.raises(RuntimeError, match='synthetic refresh failure'):
                 recompute_outsourcing(conn, rules)
         assert all(row[0] == 'clean' for row in conn.execute('SELECT outsourcing_level FROM jobs'))

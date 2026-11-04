@@ -3,9 +3,9 @@ from unittest.mock import Mock, patch
 
 
 class BrowserFacadeTests(unittest.TestCase):
-    @patch("bosshunter.browser.client.httpx.get")
+    @patch("jobhunter_pro.browser.client.httpx.get")
     def test_runtime_client_allows_slow_new_tab_creation(self, get):
-        from bosshunter.browser.client import RuntimeClient
+        from jobhunter_pro.browser.client import RuntimeClient
 
         get.return_value.status_code = 200
         get.return_value.json.return_value = {"targetId": "target-1"}
@@ -13,10 +13,10 @@ class BrowserFacadeTests(unittest.TestCase):
         self.assertEqual(RuntimeClient({}).new_tab("https://example.com"), "target-1")
         self.assertEqual(get.call_args.kwargs["timeout"], 30)
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_new_tab_returns_target_id_from_runtime_client(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
         client_cls.return_value.new_tab.return_value = "target-1"
@@ -27,10 +27,10 @@ class BrowserFacadeTests(unittest.TestCase):
         ensure_runtime.assert_called_once()
         client_cls.return_value.new_tab.assert_called_once_with("https://example.com", background=False)
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_new_tab_can_open_in_background(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
         client_cls.return_value.new_tab.return_value = "target-1"
@@ -40,10 +40,10 @@ class BrowserFacadeTests(unittest.TestCase):
         self.assertEqual(result, "target-1")
         client_cls.return_value.new_tab.assert_called_once_with("https://example.com", background=True)
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_new_tab_returns_none_when_runtime_unavailable(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = False
 
@@ -52,10 +52,10 @@ class BrowserFacadeTests(unittest.TestCase):
         self.assertIsNone(result)
         client_cls.assert_not_called()
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_evaluate_returns_runtime_value(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
         client_cls.return_value.evaluate.return_value = {"title": "ok"}
@@ -65,20 +65,20 @@ class BrowserFacadeTests(unittest.TestCase):
         self.assertEqual(result, {"title": "ok"})
         client_cls.return_value.evaluate.assert_called_once_with("target-1", "document.title", 12)
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_click_returns_boolean(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
         client_cls.return_value.click.return_value = True
 
         self.assertTrue(browser.click("target-1", "button"))
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_type_text_can_request_human_input_events(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
         client_cls.return_value.type_text.return_value = True
@@ -86,10 +86,10 @@ class BrowserFacadeTests(unittest.TestCase):
         self.assertTrue(browser.type_text("target-1", "hello", human=True))
         client_cls.return_value.type_text.assert_called_once_with("target-1", "hello", human=True)
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_press_key_delegates_to_runtime_client(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
         client_cls.return_value.press_key.return_value = True
@@ -97,10 +97,10 @@ class BrowserFacadeTests(unittest.TestCase):
         self.assertTrue(browser.press_key("target-1", "SelectAll"))
         client_cls.return_value.press_key.assert_called_once_with("target-1", "SelectAll")
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_get_page_info_returns_dict(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
         client_cls.return_value.info.return_value = {"title": "T", "url": "https://example.com", "ready": "complete"}
@@ -109,10 +109,10 @@ class BrowserFacadeTests(unittest.TestCase):
 
         self.assertEqual(result["ready"], "complete")
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_wait_for_load_polls_until_ready_complete(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
         client_cls.return_value.info.side_effect = [
@@ -120,25 +120,25 @@ class BrowserFacadeTests(unittest.TestCase):
             {"ready": "complete"},
         ]
 
-        with patch("bosshunter.browser.time.sleep"):
+        with patch("jobhunter_pro.browser.time.sleep"):
             self.assertTrue(browser.wait_for_load("target-1", timeout=2))
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_check_chrome_connection_returns_health(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
-        client_cls.return_value.health.return_value = {"status": "ok", "runtime": "bosshunter"}
+        client_cls.return_value.health.return_value = {"status": "ok", "runtime": "jobhunter_pro"}
 
         result = browser.check_chrome_connection()
 
-        self.assertEqual(result["runtime"], "bosshunter")
+        self.assertEqual(result["runtime"], "jobhunter_pro")
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_find_boss_tab_matches_zhipin_url(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
         client_cls.return_value.targets.return_value = [
@@ -150,10 +150,10 @@ class BrowserFacadeTests(unittest.TestCase):
 
         self.assertEqual(result["targetId"], "2")
 
-    @patch("bosshunter.browser.RuntimeClient")
-    @patch("bosshunter.browser.ensure_runtime")
+    @patch("jobhunter_pro.browser.RuntimeClient")
+    @patch("jobhunter_pro.browser.ensure_runtime")
     def test_print_pdf_delegates_to_client(self, ensure_runtime, client_cls):
-        import bosshunter.browser as browser
+        import jobhunter_pro.browser as browser
 
         ensure_runtime.return_value = True
         client_cls.return_value.print_pdf.return_value = True

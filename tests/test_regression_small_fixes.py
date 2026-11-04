@@ -40,15 +40,15 @@ class VersionMetadataTests(unittest.TestCase):
     def test_release_version_is_consistent(self):
         import json
 
-        import bosshunter
-        from bosshunter.web.server import health
+        import jobhunter_pro
+        from jobhunter_pro.web.server import health
 
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
         sidebar_source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -58,20 +58,20 @@ class VersionMetadataTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         version = "2.4.0"
-        frontend = ROOT / "src" / "bosshunter" / "web" / "frontend"
+        frontend = ROOT / "src" / "jobhunter_pro" / "web" / "frontend"
         package = json.loads((frontend / "package.json").read_text(encoding="utf-8"))
         lock = json.loads((frontend / "package-lock.json").read_text(encoding="utf-8"))
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
 
         self.assertIn(f'version = "{version}"', pyproject)
-        self.assertEqual(bosshunter.__version__, version)
+        self.assertEqual(jobhunter_pro.__version__, version)
         self.assertEqual(json.loads(health())["version"], version)
         self.assertEqual(package["version"], version)
         self.assertEqual(lock["version"], version)
         self.assertEqual(lock["packages"][""]["version"], version)
         self.assertIn(f"v{version} · 本地控制台", sidebar_source)
-        self.assertIn(f"BossHunter v{version}</h1>", readme)
+        self.assertIn(f"JobHunter Pro v{version}</h1>", readme)
         self.assertIn(f"version-v{version}-", readme)
         self.assertIn(f"## v{version}\n", changelog)
         self.assertNotIn("v1.1.0", sidebar_source)
@@ -109,7 +109,7 @@ class ConfigExampleTests(unittest.TestCase):
 
 class ConfigValidationTests(unittest.TestCase):
     def test_load_config_rejects_unsupported_ai_provider(self):
-        from bosshunter.config import load_config
+        from jobhunter_pro.config import load_config
 
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.yaml"
@@ -119,7 +119,7 @@ class ConfigValidationTests(unittest.TestCase):
                 load_config(config_path)
 
     def test_load_config_defaults_to_not_allowing_internships(self):
-        from bosshunter.config import load_config
+        from jobhunter_pro.config import load_config
 
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.yaml"
@@ -133,7 +133,7 @@ class ConfigValidationTests(unittest.TestCase):
         self.assertNotIn("prefilter_threshold", config["scoring"])
 
     def test_load_config_defaults_to_disabled_follow_up(self):
-        from bosshunter.config import load_config
+        from jobhunter_pro.config import load_config
 
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "config.yaml"
@@ -144,7 +144,7 @@ class ConfigValidationTests(unittest.TestCase):
         self.assertIs(config["follow_up"]["enabled"], False)
 
     def test_monitor_does_not_follow_up_when_setting_is_missing(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         with patch.object(monitor, "get_db") as get_db:
             result = monitor._check_follow_ups({"follow_up": {}}, Mock())
@@ -153,7 +153,7 @@ class ConfigValidationTests(unittest.TestCase):
         get_db.assert_not_called()
 
     def test_reply_monitor_opens_chat_in_background(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         tracked_job = {"id": "job-1", "status": "sent"}
         db = Mock()
@@ -179,7 +179,7 @@ class ConfigValidationTests(unittest.TestCase):
         )
 
     def test_monitor_job_pages_stay_in_background(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         with patch.object(
             monitor,
@@ -214,7 +214,7 @@ class ConfigValidationTests(unittest.TestCase):
 
 class AiPromptRegressionTests(unittest.TestCase):
     def test_scorer_prompt_uses_universal_weighted_evidence(self):
-        from bosshunter.ai.scorer import SCORING_PROMPT
+        from jobhunter_pro.ai.scorer import SCORING_PROMPT
 
         self.assertIn("核心职责匹配", SCORING_PROMPT)
         self.assertIn("40分", SCORING_PROMPT)
@@ -224,7 +224,7 @@ class AiPromptRegressionTests(unittest.TestCase):
         self.assertNotIn("小红书/抖音", SCORING_PROMPT)
 
     def test_tailored_resume_prompt_preserves_platform_growth_cases(self):
-        from bosshunter.ai.resume import RESUME_TAILOR_PROMPT
+        from jobhunter_pro.ai.resume import RESUME_TAILOR_PROMPT
 
         self.assertIn("平台案例和量化结果", RESUME_TAILOR_PROMPT)
         self.assertIn("阅读/观看", RESUME_TAILOR_PROMPT)
@@ -233,7 +233,7 @@ class AiPromptRegressionTests(unittest.TestCase):
 
 class PrefilterHardGateTests(unittest.TestCase):
     def test_anonymous_company_jobs_are_filtered_before_ai_scoring(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {"profile": {"deal_breakers": [], "salary_min": 0}}
         anonymous_companies = [
@@ -260,7 +260,7 @@ class PrefilterHardGateTests(unittest.TestCase):
                 self.assertEqual(reason, "匿名公司岗位")
 
     def test_named_company_jobs_still_pass_anonymous_company_filter(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {"profile": {"deal_breakers": [], "salary_min": 0}}
         score, reason = quick_score(
@@ -277,7 +277,7 @@ class PrefilterHardGateTests(unittest.TestCase):
         self.assertEqual(reason, "预筛通过")
 
     def test_deal_breakers_still_match_title_only(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {"profile": {"deal_breakers": ["外包"], "salary_min": 0}}
         job = {"title": "AI产品经理", "jd": "非外包项目，团队稳定", "salary": "20-30K"}
@@ -288,7 +288,7 @@ class PrefilterHardGateTests(unittest.TestCase):
         self.assertEqual(reason, "预筛通过")
 
     def test_deal_breaker_in_title_is_filtered(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {"profile": {"deal_breakers": ["外包"], "salary_min": 0}}
         job = {"title": "AI产品经理 外包", "jd": "", "salary": "20-30K"}
@@ -299,7 +299,7 @@ class PrefilterHardGateTests(unittest.TestCase):
         self.assertEqual(reason, "触发排除词: 外包")
 
     def test_jd_deal_breaker_filters_technical_requirements(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {
             "profile": {
@@ -320,7 +320,7 @@ class PrefilterHardGateTests(unittest.TestCase):
         self.assertEqual(reason, "触发JD排除词: SQL")
 
     def test_default_rejects_internship_titles(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {"profile": {"deal_breakers": [], "salary_min": 0}}
         job = {"title": "AI产品实习生", "jd": "", "salary": "3-5K"}
@@ -331,7 +331,7 @@ class PrefilterHardGateTests(unittest.TestCase):
         self.assertEqual(reason, "实习/管培岗位")
 
     def test_default_rejects_management_trainee_titles(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {"profile": {"deal_breakers": [], "salary_min": 0}}
         job = {"title": "产品管培生", "jd": "", "salary": "8-12K"}
@@ -342,7 +342,7 @@ class PrefilterHardGateTests(unittest.TestCase):
         self.assertEqual(reason, "实习/管培岗位")
 
     def test_allow_internship_lets_internship_titles_pass_prefilter(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {"profile": {"deal_breakers": [], "allow_internship": True, "salary_min": 0}}
         job = {"title": "AI Product Intern", "jd": "", "salary": "3-5K"}
@@ -353,7 +353,7 @@ class PrefilterHardGateTests(unittest.TestCase):
         self.assertEqual(reason, "预筛通过")
 
     def test_salary_below_minimum_is_filtered(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {"profile": {"deal_breakers": [], "salary_min": 100}}
         job = {"title": "AI产品经理", "jd": "", "salary": "12K"}
@@ -364,7 +364,7 @@ class PrefilterHardGateTests(unittest.TestCase):
         self.assertEqual(reason, "薪资低于硬性要求: 12K < 100K")
 
     def test_salary_ceiling_uses_range_lower_bound(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {"profile": {"deal_breakers": [], "salary_min": 7, "salary_max": 10, "salary_ceil_ratio": 1.0}}
 
@@ -376,7 +376,7 @@ class PrefilterHardGateTests(unittest.TestCase):
         self.assertIn("薪资远超期望上限", reason)
 
     def test_unparsed_salary_is_filtered_by_default_and_can_be_kept(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         job = {"title": "AI产品经理", "jd": "", "salary": "面议"}
         score, reason = quick_score(job, {"profile": {"deal_breakers": [], "salary_min": 7}})
@@ -391,7 +391,7 @@ class PrefilterHardGateTests(unittest.TestCase):
         self.assertIn("交由 AI 判断", reason)
 
     def test_passing_job_returns_hard_gate_pass(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         config = {"profile": {"deal_breakers": ["外包", "996"], "salary_min": 15}}
         job = {"title": "AI产品经理", "jd": "", "salary": "20-30K"}
@@ -403,11 +403,11 @@ class PrefilterHardGateTests(unittest.TestCase):
 
 
 class ConfirmationUiTests(unittest.TestCase):
-    @patch("bosshunter.ui.confirm.Prompt.ask")
-    @patch("bosshunter.ui.confirm.get_jobs_pending_confirmation")
-    @patch("bosshunter.ui.confirm.get_db")
+    @patch("jobhunter_pro.ui.confirm.Prompt.ask")
+    @patch("jobhunter_pro.ui.confirm.get_jobs_pending_confirmation")
+    @patch("jobhunter_pro.ui.confirm.get_db")
     def test_confirmation_defaults_to_individual_selection(self, get_db, get_jobs_pending_confirmation, prompt_ask):
-        from bosshunter.ui.confirm import show_confirmation
+        from jobhunter_pro.ui.confirm import show_confirmation
 
         db = Mock()
         get_db.return_value = db
@@ -424,7 +424,7 @@ class ConfirmationUiTests(unittest.TestCase):
         ]
         prompt_ask.return_value = "q"
 
-        with patch("bosshunter.ui.confirm.recompute_outsourcing") as refresh:
+        with patch("jobhunter_pro.ui.confirm.recompute_outsourcing") as refresh:
             result = show_confirmation({})
         self.assertEqual(refresh.call_args.args[0], db)
 
@@ -437,7 +437,7 @@ class DashboardPageTests(unittest.TestCase):
         self.source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -480,7 +480,7 @@ class DashboardPageTests(unittest.TestCase):
         hook_source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -523,7 +523,7 @@ class DashboardPageTests(unittest.TestCase):
         filter_source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -552,7 +552,7 @@ class DashboardPageTests(unittest.TestCase):
         search_hook_source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -562,7 +562,7 @@ class DashboardPageTests(unittest.TestCase):
         jobs_table_source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -687,7 +687,7 @@ class DashboardPageTests(unittest.TestCase):
         history_detail_source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -718,7 +718,7 @@ class DashboardPageTests(unittest.TestCase):
         history_detail_source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -744,7 +744,7 @@ class SidebarTests(unittest.TestCase):
         self.source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -756,7 +756,7 @@ class SidebarTests(unittest.TestCase):
     def test_sidebar_star_link_places_github_icon_left_and_centers_star_label(self):
         # Act / Assert
         self.assertIn("relative flex items-center", self.source)
-        self.assertIn('aria-label="BossHunter GitHub"', self.source)
+        self.assertIn('aria-label="JobHunter Pro GitHub"', self.source)
         self.assertIn("md:absolute md:left-3", self.source)
         self.assertIn("mx-auto hidden items-center justify-center gap-2 md:flex", self.source)
         self.assertIn("text-xl", self.source)
@@ -774,7 +774,7 @@ class HeaderTests(unittest.TestCase):
         self.source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -795,7 +795,7 @@ class ConfigPageTests(unittest.TestCase):
         self.source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -805,7 +805,7 @@ class ConfigPageTests(unittest.TestCase):
         self.hook_source = (
             ROOT
             / "src"
-            / "bosshunter"
+            / "jobhunter_pro"
             / "web"
             / "frontend"
             / "src"
@@ -904,7 +904,7 @@ class ConfigSchemaTests(unittest.TestCase):
         import json
 
         self.schema_source = (
-            ROOT / "src" / "bosshunter" / "web" / "config_schema.json"
+            ROOT / "src" / "jobhunter_pro" / "web" / "config_schema.json"
         ).read_text(encoding="utf-8")
         self.schema = json.loads(self.schema_source)
 
@@ -943,7 +943,7 @@ class ConfigSchemaTests(unittest.TestCase):
 
 class ScorerPrefilterTests(unittest.TestCase):
     def setUp(self):
-        self.source = (ROOT / "src" / "bosshunter" / "ai" / "scorer.py").read_text(encoding="utf-8")
+        self.source = (ROOT / "src" / "jobhunter_pro" / "ai" / "scorer.py").read_text(encoding="utf-8")
 
     def test_scorer_no_longer_depends_on_prefilter_threshold(self):
         self.assertNotIn("prefilter_threshold", self.source)

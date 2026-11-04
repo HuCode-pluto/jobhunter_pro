@@ -1,6 +1,6 @@
 import pytest
 
-from bosshunter.web.resume_upload import ResumeUploadError, prepare_resume_content
+from jobhunter_pro.web.resume_upload import ResumeUploadError, prepare_resume_content
 
 
 def test_markdown_upload_rejects_non_utf8_bytes():

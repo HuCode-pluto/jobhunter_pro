@@ -7,13 +7,13 @@ from pathlib import Path
 import yaml
 from click.testing import CliRunner
 
-from bosshunter.config import (
+from jobhunter_pro.config import (
     credentials_path_for,
     load_config,
     migrate_legacy_credentials,
     save_config,
 )
-from bosshunter.main import cli
+from jobhunter_pro.main import cli
 
 
 class ConfigCredentialsTests(unittest.TestCase):

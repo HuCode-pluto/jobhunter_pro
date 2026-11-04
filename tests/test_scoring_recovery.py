@@ -3,8 +3,8 @@ from unittest.mock import patch
 
 import pytest
 
-from bosshunter.ai.scorer import ScoreOutcome, score_jobs
-from bosshunter.db import (
+from jobhunter_pro.ai.scorer import ScoreOutcome, score_jobs
+from jobhunter_pro.db import (
 	JobDeletionConflictError,
 	get_db,
 	insert_job,
@@ -12,13 +12,13 @@ from bosshunter.db import (
 	update_job_score,
 	update_job_status,
 )
-from bosshunter.scoring_run_store import (
+from jobhunter_pro.scoring_run_store import (
 	create_scoring_run,
 	get_scoring_run,
 	mark_orphaned_scoring_runs_paused,
 	update_scoring_run,
 )
-from bosshunter.scoring_selection import preview_scoring, select_scoring_jobs, validate_options
+from jobhunter_pro.scoring_selection import preview_scoring, select_scoring_jobs, validate_options
 
 
 def _job(job_id: str) -> dict:
@@ -100,10 +100,10 @@ def test_pause_checkpoint_keeps_current_and_unstarted_jobs_for_recovery(tmp_path
 		ScoreOutcome(pause_reason="AI quota exhausted"),
 	]
 	with (
-		patch("bosshunter.ai.scorer.get_db", side_effect=lambda: get_db(db_path)),
-		patch("bosshunter.ai.scorer._load_resume", return_value="real resume"),
-		patch("bosshunter.ai.scorer.quick_score", return_value=(80, "pass")),
-		patch("bosshunter.ai.scorer._score_job_with_ai", side_effect=outcomes),
+		patch("jobhunter_pro.ai.scorer.get_db", side_effect=lambda: get_db(db_path)),
+		patch("jobhunter_pro.ai.scorer._load_resume", return_value="real resume"),
+		patch("jobhunter_pro.ai.scorer.quick_score", return_value=(80, "pass")),
+		patch("jobhunter_pro.ai.scorer._score_job_with_ai", side_effect=outcomes),
 	):
 		score_jobs(
 			{
@@ -133,9 +133,9 @@ def test_user_stop_pause_keeps_error_empty_for_clean_record(tmp_path):
 	stop_event = Event()
 	stop_event.set()
 	with (
-		patch("bosshunter.ai.scorer.get_db", side_effect=lambda: get_db(db_path)),
-		patch("bosshunter.ai.scorer._load_resume", return_value="real resume"),
-		patch("bosshunter.ai.scorer.quick_score", return_value=(80, "pass")),
+		patch("jobhunter_pro.ai.scorer.get_db", side_effect=lambda: get_db(db_path)),
+		patch("jobhunter_pro.ai.scorer._load_resume", return_value="real resume"),
+		patch("jobhunter_pro.ai.scorer.quick_score", return_value=(80, "pass")),
 	):
 		score_jobs(
 			{

@@ -1,8 +1,8 @@
 from unittest.mock import patch
 import yaml
-from bosshunter.config import load_config, save_config
-from bosshunter.ai import greeter
-from bosshunter.db import get_db, insert_job, update_job_status
+from jobhunter_pro.config import load_config, save_config
+from jobhunter_pro.ai import greeter
+from jobhunter_pro.db import get_db, insert_job, update_job_status
 
 
 def test_default_generation_skips_review_but_explicit_opt_in_survives(tmp_path):

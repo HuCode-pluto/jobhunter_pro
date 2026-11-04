@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 
 import httpx
 
-from bosshunter.web.preflight import check_ai_connection, check_browser_connection, collect_preflight_checks
+from jobhunter_pro.web.preflight import check_ai_connection, check_browser_connection, collect_preflight_checks
 
 
 class AiPreflightTests(unittest.TestCase):
@@ -14,7 +14,7 @@ class AiPreflightTests(unittest.TestCase):
 		self.assertEqual(checks[0]["status"], "error")
 		self.assertIn("填写 API Key", checks[0]["detail"])
 
-	@patch("bosshunter.web.preflight.httpx.get")
+	@patch("jobhunter_pro.web.preflight.httpx.get")
 	def test_rejected_api_key_is_reported_without_exposing_key(self, http_get):
 		http_get.return_value = Mock(status_code=401)
 		config = {"ai": {"api_key": "secret-key", "model": "claude-sonnet-4-6"}}
@@ -25,7 +25,7 @@ class AiPreflightTests(unittest.TestCase):
 		self.assertIn("API Key 验证失败", checks[0]["message"])
 		self.assertNotIn("secret-key", str(checks))
 
-	@patch("bosshunter.web.preflight.httpx.get")
+	@patch("jobhunter_pro.web.preflight.httpx.get")
 	def test_valid_api_connection_returns_pass(self, http_get):
 		http_get.return_value = Mock(status_code=200)
 		config = {"ai": {"api_key": "secret-key", "model": "claude-sonnet-4-6"}}
@@ -54,7 +54,7 @@ class AiPreflightTests(unittest.TestCase):
 		self.assertEqual(checks[0]["id"], "ai_base_url")
 		self.assertEqual(checks[0]["status"], "error")
 
-	@patch("bosshunter.web.preflight.httpx.get")
+	@patch("jobhunter_pro.web.preflight.httpx.get")
 	def test_ai_client_initialization_error_is_reported_as_runtime_failure(self, http_get):
 		"""客户端初始化失败发生在请求前，应提示本地环境且不得泄露配置。"""
 		api_key = "secret-key-that-must-not-leak"
@@ -77,13 +77,13 @@ class AiPreflightTests(unittest.TestCase):
 		self.assertIn("运行环境", checks[0]["message"])
 		self.assertIn("Python", checks[0]["detail"])
 		self.assertIn("HTTPX", checks[0]["detail"])
-		self.assertIn("BossHunter", checks[0]["detail"])
+		self.assertIn("JobHunter Pro", checks[0]["detail"])
 		self.assertNotIn(api_key, str(checks))
 		self.assertNotIn(base_url, str(checks))
 
-	@patch("bosshunter.web.preflight.sys.version", "3.13.0a5 (test build)")
-	@patch("bosshunter.web.preflight.sys.version_info", Mock(releaselevel="alpha"))
-	@patch("bosshunter.web.preflight.httpx.get")
+	@patch("jobhunter_pro.web.preflight.sys.version", "3.13.0a5 (test build)")
+	@patch("jobhunter_pro.web.preflight.sys.version_info", Mock(releaselevel="alpha"))
+	@patch("jobhunter_pro.web.preflight.httpx.get")
 	def test_prerelease_python_adds_runtime_warning(self, http_get):
 		"""预发布 Python 可能存在依赖兼容风险，连接成功时也应明确警告。"""
 		http_get.return_value = Mock(status_code=200)
@@ -98,7 +98,7 @@ class AiPreflightTests(unittest.TestCase):
 		self.assertIn("3.13.0a5", warning["detail"])
 		self.assertNotIn("secret-key", str(checks))
 
-	@patch("bosshunter.web.preflight.httpx.get")
+	@patch("jobhunter_pro.web.preflight.httpx.get")
 	def test_ai_timeout_has_specific_feedback(self, http_get):
 		http_get.side_effect = httpx.ReadTimeout("timed out")
 		config = {"ai": {"api_key": "secret-key", "model": "claude-sonnet-4-6"}}
@@ -108,7 +108,7 @@ class AiPreflightTests(unittest.TestCase):
 		self.assertEqual(checks[0]["status"], "error")
 		self.assertIn("连接超时", checks[0]["message"])
 
-	@patch("bosshunter.web.preflight.httpx.get")
+	@patch("jobhunter_pro.web.preflight.httpx.get")
 	def test_invalid_ai_base_url_has_specific_feedback(self, http_get):
 		http_get.side_effect = httpx.InvalidURL("Invalid port: ':1'")
 		config = {
@@ -129,7 +129,7 @@ class AiPreflightTests(unittest.TestCase):
 
 
 class BrowserPreflightTests(unittest.TestCase):
-	@patch("bosshunter.web.preflight.run_browser_diagnostics")
+	@patch("jobhunter_pro.web.preflight.run_browser_diagnostics")
 	def test_unselected_platform_tabs_are_not_reported(self, diagnostics):
 		diagnostics.return_value = {
 			"node": {"available": True, "version": "v22"},
@@ -147,7 +147,7 @@ class BrowserPreflightTests(unittest.TestCase):
 
 		self.assertFalse(any(check["id"].startswith("zhilian") for check in checks))
 
-	@patch("bosshunter.web.preflight.run_browser_diagnostics")
+	@patch("jobhunter_pro.web.preflight.run_browser_diagnostics")
 	def test_zhilian_only_collection_does_not_report_missing_boss_tab(self, diagnostics):
 		diagnostics.return_value = {
 			"node": {"available": True, "version": "v22"},
@@ -167,8 +167,8 @@ class BrowserPreflightTests(unittest.TestCase):
 		self.assertFalse(any(check["id"].startswith("boss") for check in checks))
 		self.assertEqual(next(check for check in checks if check["id"] == "zhilian_tab")["status"], "pass")
 
-	@patch("bosshunter.web.preflight.check_ai_connection")
-	@patch("bosshunter.web.preflight.check_browser_connection")
+	@patch("jobhunter_pro.web.preflight.check_ai_connection")
+	@patch("jobhunter_pro.web.preflight.check_browser_connection")
 	def test_full_flow_uses_only_explicit_full_flow_platform_order(self, browser_check, ai_check):
 		ai_check.return_value = []
 		browser_check.return_value = []
@@ -187,7 +187,7 @@ class BrowserPreflightTests(unittest.TestCase):
 		self.assertIn("执行顺序：boss", platform_check["detail"])
 		self.assertIn("只有支持投递的平台", platform_check["detail"])
 
-	@patch("bosshunter.web.preflight.run_browser_diagnostics")
+	@patch("jobhunter_pro.web.preflight.run_browser_diagnostics")
 	def test_running_runtime_is_reused_when_node_is_not_on_path(self, diagnostics):
 		diagnostics.return_value = {
 			"node": {"available": False, "version": None},
@@ -206,7 +206,7 @@ class BrowserPreflightTests(unittest.TestCase):
 		self.assertEqual(runtime_check["status"], "pass")
 		self.assertNotIn("Node.js", str(checks))
 
-	@patch("bosshunter.web.preflight.run_browser_diagnostics")
+	@patch("jobhunter_pro.web.preflight.run_browser_diagnostics")
 	def test_missing_remote_debugging_is_reported(self, diagnostics):
 		diagnostics.return_value = {
 			"node": {"available": True, "version": "v22"},
@@ -222,7 +222,7 @@ class BrowserPreflightTests(unittest.TestCase):
 		self.assertEqual(chrome_check["status"], "error")
 		self.assertIn("chrome://inspect/#remote-debugging", chrome_check["detail"])
 
-	@patch("bosshunter.web.preflight.run_browser_diagnostics")
+	@patch("jobhunter_pro.web.preflight.run_browser_diagnostics")
 	def test_non_google_browser_is_reported(self, diagnostics):
 		diagnostics.return_value = {
 			"node": {"available": True, "version": "v22"},
@@ -240,7 +240,7 @@ class BrowserPreflightTests(unittest.TestCase):
 		self.assertEqual(product_check["status"], "error")
 		self.assertIn("不是 Google Chrome", product_check["message"])
 
-	@patch("bosshunter.web.preflight.run_browser_diagnostics")
+	@patch("jobhunter_pro.web.preflight.run_browser_diagnostics")
 	def test_chromium_name_is_rejected_even_when_product_looks_like_chrome(self, diagnostics):
 		diagnostics.return_value = {
 			"node": {"available": True, "version": "v22"},
@@ -259,7 +259,7 @@ class BrowserPreflightTests(unittest.TestCase):
 		self.assertEqual(product_check["status"], "error")
 		self.assertIn("Chromium", product_check["message"])
 
-	@patch("bosshunter.web.preflight.run_browser_diagnostics")
+	@patch("jobhunter_pro.web.preflight.run_browser_diagnostics")
 	def test_selected_zhilian_requires_real_search_page_state(self, diagnostics):
 		diagnostics.return_value = {
 			"node": {"available": True, "version": "v22"},

@@ -4,8 +4,8 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase, mock
 
-from bosshunter.db import get_db, insert_job
-from bosshunter.web import server
+from jobhunter_pro.db import get_db, insert_job
+from jobhunter_pro.web import server
 
 
 class PlatformDeliveryGuardTests(TestCase):
@@ -47,7 +47,7 @@ class PlatformDeliveryGuardTests(TestCase):
         ):
             with self.subTest(platform=platform), tempfile.TemporaryDirectory() as tmp:
                 base_dir = Path(tmp)
-                db = get_db(base_dir / "data" / "bosshunter.db")
+                db = get_db(base_dir / "data" / "jobhunter_pro.db")
                 try:
                     insert_job(db, {
                         "id": job_id,

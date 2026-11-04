@@ -1,6 +1,6 @@
-# BossHunter 维护者记录
+# JobHunter Pro 维护者记录
 
-本文件从 **2026-08-28** 起正式记录 BossHunter 的现任和历任维护者。
+本文件从 **2026-08-28** 起正式记录 JobHunter Pro 的现任和历任维护者。
 
 维护者身份表示对全项目承担持续的人类维护责任。AI 工具可以协助执行工作，但不列入维护者名单。
 
@@ -35,7 +35,7 @@
 |---|---|---|---|---|
 | [@shuaigechz-cloud](https://github.com/shuaigechz-cloud) | 会话与消息链路、招呼语约束、定制简历与人工确认 | 2026-09-07 | 待指定 | 观察中（Triage；已接受邀请） |
 
-邀请于 **2026-09-07 08:16（北京时间）**接受，仓库 Triage 权限已生效。证据：[GitHub 成员事件](https://api.github.com/repos/shengjidaguai-china/BossHunter/events)（事件 ID：14535877238）；[已采用的项目贡献](CONTRIBUTORS.md)。
+邀请于 **2026-09-07 08:16（北京时间）**接受，仓库 Triage 权限已生效。证据：[GitHub 成员事件](https://api.github.com/repos/shengjidaguai-china/JobHunter Pro/events)（事件 ID：14535877238）；[已采用的项目贡献](CONTRIBUTORS.md)。
 
 ## 现任维护者贡献详情
 

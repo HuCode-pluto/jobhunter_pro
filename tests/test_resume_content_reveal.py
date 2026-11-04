@@ -13,10 +13,10 @@ import yaml
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
-from bosshunter.web import server
+from jobhunter_pro.web import server
 
 ROOT = Path(__file__).resolve().parents[1]
-FRONTEND = ROOT / "src" / "bosshunter" / "web" / "frontend" / "src"
+FRONTEND = ROOT / "src" / "jobhunter_pro" / "web" / "frontend" / "src"
 
 
 class ResumeDisplayHelperNodeTests(unittest.TestCase):
@@ -174,7 +174,7 @@ class ResumeApiPreviewRouteTests(unittest.TestCase):
 		return status_headers["status"], status_headers["headers"], body
 
 	def _upload_resume(self, filename: str, content: bytes, content_type: str):
-		boundary = "----BossHunterResumeUpload"
+		boundary = "----JobHunter ProResumeUpload"
 		body = (
 			(
 				f"--{boundary}\r\n"
@@ -521,7 +521,7 @@ class ResumeApiPreviewRouteTests(unittest.TestCase):
 			(base_dir / "config.yaml").write_text("{}\n", encoding="utf-8")
 			server.set_base_dir(base_dir)
 
-			boundary = "----BossHunterNoFile"
+			boundary = "----JobHunter ProNoFile"
 			# Valid multipart body, but no `file` part.
 			body = (
 				f"--{boundary}\r\n"

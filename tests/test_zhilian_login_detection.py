@@ -6,8 +6,8 @@ import shutil
 import subprocess
 import unittest
 
-from bosshunter.collection.base import CollectionBlockedError
-from bosshunter.collection.platforms.zhilian import JS_EXTRACT_LIST, parse_zhilian_list_html
+from jobhunter_pro.collection.base import CollectionBlockedError
+from jobhunter_pro.collection.platforms.zhilian import JS_EXTRACT_LIST, parse_zhilian_list_html
 
 
 class ZhilianLoginDetectionTests(unittest.TestCase):

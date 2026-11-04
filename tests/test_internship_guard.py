@@ -8,14 +8,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bosshunter.ai.prefilter import quick_score
-from bosshunter.collection.base import CollectorHooks
-from bosshunter.collection.models import PlatformCollectionRequest, classify_recruitment_type
-from bosshunter.collection.platforms.boss import (
+from jobhunter_pro.ai.prefilter import quick_score
+from jobhunter_pro.collection.base import CollectorHooks
+from jobhunter_pro.collection.models import PlatformCollectionRequest, classify_recruitment_type
+from jobhunter_pro.collection.platforms.boss import (
     JS_DETECT_COLLECTION_RISK, JS_EXTRACT_DETAIL, JS_EXTRACT_LIST,
     JS_VERIFY_INTERNSHIP_FILTER, BossBrowser, BossCollector, build_boss_filter_query,
 )
-from bosshunter.employment import classify_employment, internship_only, internship_rejection
+from jobhunter_pro.employment import classify_employment, internship_only, internship_rejection
 
 CONFIG = {
     "profile": {"allow_internship": True, "filter_unparsed_salary": False},
@@ -110,7 +110,7 @@ def collect_fixture(title, jd, *, applied=True, config=None, filters=None):
         "boss", ["Go"], ["深圳"], {"深圳": "101280600"}, max_pages=1,
         filters=filters if filters is not None else {"job_type": ["实习"]},
     )
-    with patch("bosshunter.collection.platforms.boss.time.sleep"):
+    with patch("jobhunter_pro.collection.platforms.boss.time.sleep"):
         result = BossCollector(
             browser=browser, config=config if config is not None else CONFIG,
             throttle_factory=lambda **_kw: throttle, sleep=lambda _s: None,
@@ -163,14 +163,14 @@ def test_other_prefilter_settings_and_input_config_are_preserved():
     ("实习生", "岗位性质：兼职"),
 ])
 def test_sender_blocks_historical_nonintern_before_browser(title, jd):
-    from bosshunter.executor.sender import send_greetings
+    from jobhunter_pro.executor.sender import send_greetings
 
     config = deepcopy(CONFIG)
-    with patch("bosshunter.executor.sender.get_db", return_value=MagicMock()), \
-         patch("bosshunter.executor.sender.PlatformAccessGuard"), \
-         patch("bosshunter.executor.sender.get_jobs_ready_to_send", return_value=[
+    with patch("jobhunter_pro.executor.sender.get_db", return_value=MagicMock()), \
+         patch("jobhunter_pro.executor.sender.PlatformAccessGuard"), \
+         patch("jobhunter_pro.executor.sender.get_jobs_ready_to_send", return_value=[
              {"id": "old", "title": title, "jd": jd, "source_platform": "boss"},
-         ]), patch("bosshunter.executor.sender._send_greeting_once") as send:
+         ]), patch("jobhunter_pro.executor.sender._send_greeting_once") as send:
         assert send_greetings(config, force=True) == 0
         assert config["_workbench_send_report"]["employment_blocked_ids"] == ["old"]
         send.assert_not_called()
@@ -203,7 +203,7 @@ console.log('internship DOM guard: ok');
 
 
 def test_web_employment_hint_does_not_rewrite_historical_recruitment_type():
-    from bosshunter.web import server
+    from jobhunter_pro.web import server
 
     job = {"id": "old", "title": "实习生", "jd": "职位类型：兼职", "recruitment_type": "campus"}
     with patch.object(server, "load_config") as load:
@@ -216,8 +216,8 @@ def test_web_employment_hint_does_not_rewrite_historical_recruitment_type():
 
 
 def test_legacy_scraper_counts_employment_filter_events():
-    from bosshunter.scraper.jobs import scrape_jobs
-    from bosshunter.collection.models import PlatformCollectionResult
+    from jobhunter_pro.scraper.jobs import scrape_jobs
+    from jobhunter_pro.collection.models import PlatformCollectionResult
 
     updates = []
     config = {**deepcopy(CONFIG), "profile": {"target_cities": ["深圳"]},
@@ -227,8 +227,8 @@ def test_legacy_scraper_counts_employment_filter_events():
         hooks.on_event(message="仅实习：非实习岗位", increment_filtered=True)
         return PlatformCollectionResult("boss", "completed", "search_exhausted", "fixture")
 
-    with patch("bosshunter.scraper.jobs.get_db", return_value=MagicMock()), \
-         patch("bosshunter.scraper.jobs.BossCollector.collect", side_effect=collect):
+    with patch("jobhunter_pro.scraper.jobs.get_db", return_value=MagicMock()), \
+         patch("jobhunter_pro.scraper.jobs.BossCollector.collect", side_effect=collect):
         assert scrape_jobs(config, ["Go"]) == 0
     assert updates[-1]["filtered"] == 1
 
@@ -262,16 +262,16 @@ def test_disabled_acceptance_is_checked_after_detail_without_only_filter():
 
 @pytest.mark.parametrize("filters", [{"job_type": ["实习"]}, {}])
 def test_sender_blocks_detail_only_internship_when_acceptance_disabled(filters):
-    from bosshunter.executor.sender import send_greetings
+    from jobhunter_pro.executor.sender import send_greetings
 
     config = deepcopy(CONFIG)
     config["profile"]["allow_internship"] = False
     config["platforms"]["boss"]["search"]["filters"] = filters
-    with patch("bosshunter.executor.sender.get_db", return_value=MagicMock()), \
-         patch("bosshunter.executor.sender.PlatformAccessGuard"), \
-         patch("bosshunter.executor.sender.get_jobs_ready_to_send", return_value=[{
+    with patch("jobhunter_pro.executor.sender.get_db", return_value=MagicMock()), \
+         patch("jobhunter_pro.executor.sender.PlatformAccessGuard"), \
+         patch("jobhunter_pro.executor.sender.get_jobs_ready_to_send", return_value=[{
              "id": "historical", "title": "后端开发", "jd": "职位类型：实习", "source_platform": "boss",
-         }]), patch("bosshunter.executor.sender._send_greeting_once") as send:
+         }]), patch("jobhunter_pro.executor.sender._send_greeting_once") as send:
         assert send_greetings(config, force=True) == 0
         assert config["_workbench_send_report"]["employment_blocked_ids"] == ["historical"]
         send.assert_not_called()
@@ -279,7 +279,7 @@ def test_sender_blocks_detail_only_internship_when_acceptance_disabled(filters):
 
 @pytest.mark.parametrize("source", ["saved", "dialog", "legacy"])
 def test_collection_start_rejects_conflicting_effective_filters(source):
-    from bosshunter.collection.orchestrator import normalize_collection_options
+    from jobhunter_pro.collection.orchestrator import normalize_collection_options
 
     config = {"profile": {"allow_internship": False, "target_cities": ["深圳"]}}
     search = {"keywords": ["Go"], "cities": ["深圳"], "filters": {"job_type": ["实习"]}}
@@ -309,7 +309,7 @@ def test_disabled_acceptance_does_not_block_full_time_or_other_platforms():
 @pytest.mark.parametrize("mode", ["collect", "full"])
 def test_web_start_returns_actionable_conflict_without_scheduling(mode):
     import test_web_api_routes as web_tests
-    from bosshunter.web import server
+    from jobhunter_pro.web import server
 
     config = deepcopy(CONFIG)
     config["profile"]["allow_internship"] = False
@@ -332,7 +332,7 @@ def test_detail_guard_keeps_acceptance_after_startup_check():
     # to emulate an older entry point, not the shared employment guard.
     config = deepcopy(CONFIG)
     config["profile"]["allow_internship"] = False
-    with patch("bosshunter.collection.platforms.boss.internship_config_error", return_value=""):
+    with patch("jobhunter_pro.collection.platforms.boss.internship_config_error", return_value=""):
         _, items, events, scripts = collect_fixture("后端开发", "职位类型：实习", config=config)
     assert JS_EXTRACT_DETAIL in scripts
     assert items == []

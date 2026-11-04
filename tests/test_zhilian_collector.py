@@ -4,9 +4,9 @@ from threading import Event
 from unittest import TestCase
 from unittest.mock import patch
 
-from bosshunter.collection.base import CollectionBlockedError, CollectionError, CollectorHooks
-from bosshunter.collection.models import PlatformCollectionRequest
-from bosshunter.collection.platforms.zhilian import (
+from jobhunter_pro.collection.base import CollectionBlockedError, CollectionError, CollectorHooks
+from jobhunter_pro.collection.models import PlatformCollectionRequest
+from jobhunter_pro.collection.platforms.zhilian import (
     JD_CLASSES,
     JS_EXTRACT_DETAIL,
     JS_EXTRACT_LIST,
@@ -30,8 +30,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 class ZhilianFixtureTests(TestCase):
     def setUp(self):
         self._patches = [
-            patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.zhilian.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.should_take_day_off", return_value=False),
         ]
         for p in self._patches:
             p.start()
@@ -42,7 +42,7 @@ class ZhilianFixtureTests(TestCase):
 
     def test_city_snapshot_is_local_and_not_shared_with_boss_codes(self):
         snapshot = load_zhilian_city_snapshot()
-        self.assertEqual(snapshot["schema"], "bosshunter.zhilian_cities.v1")
+        self.assertEqual(snapshot["schema"], "jobhunter_pro.zhilian_cities.v1")
 
         self.assertGreaterEqual(len(snapshot["cities"]), 10)
         self.assertEqual(get_zhilian_city_code("北京"), "530")
@@ -407,7 +407,7 @@ class ZhilianEnhancedTests(TestCase):
 
     def test_outside_send_window_skips_collection(self):
         collector = ZhilianCollector()
-        with patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=False):
+        with patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=False):
             result = collector.collect(
                 PlatformCollectionRequest("zhilian", ["AI"], ["北京"], {"北京": "530"}, max_pages=1),
                 self._hooks(),
@@ -418,8 +418,8 @@ class ZhilianEnhancedTests(TestCase):
     def test_day_off_skips_collection(self):
         collector = ZhilianCollector()
         with (
-            patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.zhilian.should_take_day_off", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.should_take_day_off", return_value=True),
         ):
             result = collector.collect(
                 PlatformCollectionRequest("zhilian", ["AI"], ["北京"], {"北京": "530"}, max_pages=1),
@@ -429,56 +429,56 @@ class ZhilianEnhancedTests(TestCase):
         self.assertEqual(result.reason_code, "day_off")
 
     def test_deal_breaker_filter(self):
-        from bosshunter.collection.models import JobCandidate
+        from jobhunter_pro.collection.models import JobCandidate
         collector = ZhilianCollector(config={"profile": {"deal_breakers": ["外包"]}})
         c = JobCandidate(platform="zhilian", source_job_id="1", title="外包AI",
                          company="公司", city="北京", city_code="530")
         self.assertFalse(collector._passes_filters(c))
 
     def test_blocked_company_filter(self):
-        from bosshunter.collection.models import JobCandidate
+        from jobhunter_pro.collection.models import JobCandidate
         collector = ZhilianCollector(config={"profile": {"blocked_companies": ["黑名单"]}})
         c = JobCandidate(platform="zhilian", source_job_id="1", title="AI工程师",
                          company="黑名单", city="北京", city_code="530")
         self.assertFalse(collector._passes_filters(c))
 
     def test_internship_filter(self):
-        from bosshunter.collection.models import JobCandidate
+        from jobhunter_pro.collection.models import JobCandidate
         collector = ZhilianCollector(config={"profile": {"allow_internship": False}})
         c = JobCandidate(platform="zhilian", source_job_id="1", title="AI实习",
                          company="公司", city="北京", city_code="530")
         self.assertFalse(collector._passes_filters(c))
 
     def test_no_filter_passes(self):
-        from bosshunter.collection.models import JobCandidate
+        from jobhunter_pro.collection.models import JobCandidate
         collector = ZhilianCollector()
         c = JobCandidate(platform="zhilian", source_job_id="1", title="AI工程师",
                          company="公司", city="北京", city_code="530")
         self.assertTrue(collector._passes_filters(c))
 
     def test_salary_below_min_blocked(self):
-        from bosshunter.collection.models import JobCandidate
+        from jobhunter_pro.collection.models import JobCandidate
         collector = ZhilianCollector(config={"profile": {"salary_min": 10, "salary_max": 20}})
         c = JobCandidate(platform="zhilian", source_job_id="1", title="AI工程师",
                          company="公司", city="北京", city_code="530", salary="5-8K")
         self.assertIsNotNone(collector._salary_block_reason(c))
 
     def test_salary_unparsable_blocked_by_default(self):
-        from bosshunter.collection.models import JobCandidate
+        from jobhunter_pro.collection.models import JobCandidate
         collector = ZhilianCollector(config={"profile": {"salary_min": 10, "salary_max": 20}})
         c = JobCandidate(platform="zhilian", source_job_id="1", title="AI工程师",
                          company="公司", city="北京", city_code="530", salary="面议")
         self.assertIsNotNone(collector._salary_block_reason(c))
 
     def test_salary_within_range_passes(self):
-        from bosshunter.collection.models import JobCandidate
+        from jobhunter_pro.collection.models import JobCandidate
         collector = ZhilianCollector(config={"profile": {"salary_min": 10, "salary_max": 20}})
         c = JobCandidate(platform="zhilian", source_job_id="1", title="AI工程师",
                          company="公司", city="北京", city_code="530", salary="1-2万")
         self.assertIsNone(collector._salary_block_reason(c))
 
     def test_salary_parsed_passes_without_thresholds(self):
-        from bosshunter.collection.models import JobCandidate
+        from jobhunter_pro.collection.models import JobCandidate
         collector = ZhilianCollector()
         c = JobCandidate(platform="zhilian", source_job_id="1", title="AI工程师",
                          company="公司", city="北京", city_code="530", salary="15-25K")
@@ -486,7 +486,7 @@ class ZhilianEnhancedTests(TestCase):
 
     def test_salary_unparsed_blocked_by_default_even_without_thresholds(self):
         # 与 BOSS 列表预筛同规则：默认 filter_unparsed_salary=True。
-        from bosshunter.collection.models import JobCandidate
+        from jobhunter_pro.collection.models import JobCandidate
         collector = ZhilianCollector()
         c = JobCandidate(platform="zhilian", source_job_id="1", title="AI工程师",
                          company="公司", city="北京", city_code="530", salary="面议")
@@ -553,15 +553,15 @@ class ZhilianResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.zhilian.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.zhilian.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.zhilian.prune_page_progress"),
-            patch("bosshunter.collection.platforms.zhilian.get_collected_combos", return_value={("北京", "AI")}),
-            patch("bosshunter.collection.platforms.zhilian.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.zhilian.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.zhilian.mark_combo_collected"),
-            patch("bosshunter.collection.platforms.zhilian.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_collected_combos", return_value={("北京", "AI")}),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.zhilian.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.mark_combo_collected"),
+            patch("jobhunter_pro.collection.platforms.zhilian.delete_page_progress"),
         ):
             result = collector.collect(
                 PlatformCollectionRequest("zhilian", ["AI"], ["北京"], {"北京": "530"}, max_pages=1),
@@ -581,16 +581,16 @@ class ZhilianResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.zhilian.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.zhilian.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.zhilian.prune_page_progress"),
-            patch("bosshunter.collection.platforms.zhilian.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.zhilian.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.zhilian.upsert_page_progress",
+            patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.zhilian.upsert_page_progress",
                   side_effect=lambda _c, _s, _ci, _k, page: checkpoints.append(page)),
-            patch("bosshunter.collection.platforms.zhilian.mark_combo_collected"),
-            patch("bosshunter.collection.platforms.zhilian.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.mark_combo_collected"),
+            patch("jobhunter_pro.collection.platforms.zhilian.delete_page_progress"),
         ):
             result = collector.collect(
                 PlatformCollectionRequest("zhilian", ["AI"], ["北京"], {"北京": "530"}, max_pages=3),
@@ -607,15 +607,15 @@ class ZhilianResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.zhilian.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.zhilian.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.zhilian.prune_page_progress"),
-            patch("bosshunter.collection.platforms.zhilian.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.zhilian.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.zhilian.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.zhilian.mark_combo_collected") as mark_complete,
-            patch("bosshunter.collection.platforms.zhilian.delete_page_progress") as delete_progress,
+            patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.zhilian.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.mark_combo_collected") as mark_complete,
+            patch("jobhunter_pro.collection.platforms.zhilian.delete_page_progress") as delete_progress,
         ):
             result = collector.collect(
                 PlatformCollectionRequest("zhilian", ["AI"], ["北京"], {"北京": "530"}, max_pages=2),
@@ -641,15 +641,15 @@ class ZhilianResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.zhilian.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.zhilian.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.zhilian.prune_page_progress"),
-            patch("bosshunter.collection.platforms.zhilian.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.zhilian.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.zhilian.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.zhilian.mark_combo_collected") as mark_complete,
-            patch("bosshunter.collection.platforms.zhilian.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.zhilian.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.mark_combo_collected") as mark_complete,
+            patch("jobhunter_pro.collection.platforms.zhilian.delete_page_progress"),
         ):
             result = collector.collect(
                 PlatformCollectionRequest("zhilian", ["AI"], ["北京"], {"北京": "530"}, max_pages=3),
@@ -667,15 +667,15 @@ class ZhilianResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.zhilian.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.zhilian.prune_collected_combos"),
-            patch("bosshunter.collection.platforms.zhilian.prune_page_progress"),
-            patch("bosshunter.collection.platforms.zhilian.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.zhilian.get_page_progress", return_value=5),
-            patch("bosshunter.collection.platforms.zhilian.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.zhilian.mark_combo_collected") as mark_complete,
-            patch("bosshunter.collection.platforms.zhilian.delete_page_progress") as delete_progress,
+            patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_collected_combos"),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_page_progress", return_value=5),
+            patch("jobhunter_pro.collection.platforms.zhilian.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.mark_combo_collected") as mark_complete,
+            patch("jobhunter_pro.collection.platforms.zhilian.delete_page_progress") as delete_progress,
         ):
             result = collector.collect(
                 PlatformCollectionRequest("zhilian", ["AI"], ["北京"], {"北京": "530"}, max_pages=3),
@@ -695,15 +695,15 @@ class ZhilianResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.zhilian.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.zhilian.prune_collected_combos") as prune_combos,
-            patch("bosshunter.collection.platforms.zhilian.prune_page_progress") as prune_pages,
-            patch("bosshunter.collection.platforms.zhilian.get_collected_combos", return_value=set()),
-            patch("bosshunter.collection.platforms.zhilian.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.zhilian.upsert_page_progress"),
-            patch("bosshunter.collection.platforms.zhilian.mark_combo_collected"),
-            patch("bosshunter.collection.platforms.zhilian.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_collected_combos") as prune_combos,
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_page_progress") as prune_pages,
+            patch("jobhunter_pro.collection.platforms.zhilian.get_collected_combos", return_value=set()),
+            patch("jobhunter_pro.collection.platforms.zhilian.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.zhilian.upsert_page_progress"),
+            patch("jobhunter_pro.collection.platforms.zhilian.mark_combo_collected"),
+            patch("jobhunter_pro.collection.platforms.zhilian.delete_page_progress"),
         ):
             collector.collect(
                 PlatformCollectionRequest("zhilian", ["AI"], ["北京"], {"北京": "530"}, max_pages=2),
@@ -746,13 +746,13 @@ class ZhilianResumeCheckpointTests(TestCase):
             sleep=lambda _s: None, uniform=lambda _a, _b: 10.0,
         )
         with (
-            patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.zhilian.should_take_day_off", return_value=False),
-            patch("bosshunter.collection.platforms.zhilian.prune_collected_combos") as prune_combos,
-            patch("bosshunter.collection.platforms.zhilian.get_collected_combos") as get_combos,
-            patch("bosshunter.collection.platforms.zhilian.get_page_progress") as get_progress,
-            patch("bosshunter.collection.platforms.zhilian.upsert_page_progress") as upsert,
-            patch("bosshunter.collection.platforms.zhilian.mark_combo_collected") as mark,
+            patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.zhilian.prune_collected_combos") as prune_combos,
+            patch("jobhunter_pro.collection.platforms.zhilian.get_collected_combos") as get_combos,
+            patch("jobhunter_pro.collection.platforms.zhilian.get_page_progress") as get_progress,
+            patch("jobhunter_pro.collection.platforms.zhilian.upsert_page_progress") as upsert,
+            patch("jobhunter_pro.collection.platforms.zhilian.mark_combo_collected") as mark,
         ):
             result = collector.collect(
                 PlatformCollectionRequest("zhilian", ["AI"], ["北京"], {"北京": "530"}, max_pages=2),
@@ -927,7 +927,7 @@ class ZhilianApiRateLimiterTests(TestCase):
 
     def test_wait_before_request_returns_true_no_stop(self):
         limiter = _ApiRateLimiter(total_requests=10, no_burst=True)
-        with patch("bosshunter.collection.platforms.zhilian._wait_or_stop", return_value=False):
+        with patch("jobhunter_pro.collection.platforms.zhilian._wait_or_stop", return_value=False):
             self.assertTrue(limiter.wait_before_request(None))
 
 
@@ -1027,8 +1027,8 @@ class ZhilianCollectApiTests(TestCase):
 
     def setUp(self):
         self._patches = [
-            patch("bosshunter.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.zhilian.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.zhilian.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.zhilian.should_take_day_off", return_value=False),
         ]
         for p in self._patches:
             p.start()

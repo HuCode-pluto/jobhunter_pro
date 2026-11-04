@@ -4,15 +4,15 @@ from threading import Event
 from unittest import TestCase
 from unittest.mock import patch
 
-from bosshunter.collection.base import CollectorHooks
-from bosshunter.collection.models import JobCandidate, PlatformCollectionResult
-from bosshunter.collection.orchestrator import (
+from jobhunter_pro.collection.base import CollectorHooks
+from jobhunter_pro.collection.models import JobCandidate, PlatformCollectionResult
+from jobhunter_pro.collection.orchestrator import (
     CollectionOrchestrator,
     normalize_collection_options,
     validate_collection_options,
 )
-from bosshunter.collection.registry import CollectorRegistry
-from bosshunter.db import get_db, insert_job
+from jobhunter_pro.collection.registry import CollectorRegistry
+from jobhunter_pro.db import get_db, insert_job
 
 
 def _candidate(platform: str, source_id: str, title: str = "正常岗位") -> JobCandidate:
@@ -78,7 +78,7 @@ class _BlockedCollector:
 
 class CollectionOrchestratorTests(TestCase):
     def test_collection_failures_preserve_context_and_remain_bounded(self):
-        from bosshunter.collection_run_store import get_collection_run
+        from jobhunter_pro.collection_run_store import get_collection_run
 
         class FailureCollector:
             def collect(self, request, hooks):
@@ -92,7 +92,7 @@ class CollectionOrchestratorTests(TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "errors.db"
-            with patch("bosshunter.collection.orchestrator.insert_job_if_new", side_effect=RuntimeError("private data")):
+            with patch("jobhunter_pro.collection.orchestrator.insert_job_if_new", side_effect=RuntimeError("private data")):
                 result = CollectionOrchestrator({}, db_path=path, registry=CollectorRegistry({"boss": FailureCollector})).run(_options())
             state = get_collection_run(path, result["run_id"])["platform_states"]["boss"]
             self.assertEqual(state["parse_failed"], 201)
@@ -112,7 +112,7 @@ class CollectionOrchestratorTests(TestCase):
             self.assertEqual(result["collected_job_ids"], [])
 
     def test_filter_records_are_bounded_persisted_and_separate_from_jobs(self):
-        from bosshunter.collection_run_store import get_collection_run
+        from jobhunter_pro.collection_run_store import get_collection_run
 
         candidates = [_candidate("boss", str(i), "外包岗位") for i in range(205)]
         registry = CollectorRegistry({"boss": lambda: _FakeCollector("boss", [], candidates)})
@@ -216,14 +216,14 @@ class CollectionOrchestratorTests(TestCase):
             finally:
                 db.close()
             config = {"profile": {"deal_breakers": ["黑名单词"]}}
-            real_insert = __import__("bosshunter.db", fromlist=["insert_job_if_new"]).insert_job_if_new
+            real_insert = __import__("jobhunter_pro.db", fromlist=["insert_job_if_new"]).insert_job_if_new
 
             def insert(record_conn, record, **kwargs):
                 if record.get("source_job_id") == "save-fail":
                     raise RuntimeError("fixture save failure")
                 return real_insert(record_conn, record, **kwargs)
 
-            with patch("bosshunter.collection.orchestrator.insert_job_if_new", side_effect=insert):
+            with patch("jobhunter_pro.collection.orchestrator.insert_job_if_new", side_effect=insert):
                 result = CollectionOrchestrator(config, db_path=db_path, registry=registry).run(
                     _options(order=["boss", "zhilian"])
                 )
@@ -248,7 +248,7 @@ class CollectionOrchestratorTests(TestCase):
         registry = CollectorRegistry({"boss": lambda: _FakeCollector("boss", [], candidates)})
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "collection.db"
-            with patch("bosshunter.ai.scorer.score_jobs") as score_jobs:
+            with patch("jobhunter_pro.ai.scorer.score_jobs") as score_jobs:
                 result = CollectionOrchestrator({}, db_path=db_path, registry=registry).run(
                     _options(auto_score=True)
                 )
@@ -260,7 +260,7 @@ class CollectionOrchestratorTests(TestCase):
         self.assertEqual(result["collected_job_ids"], ["new-1"])
 
         with tempfile.TemporaryDirectory() as tmp:
-            with patch("bosshunter.ai.scorer.score_jobs") as score_jobs:
+            with patch("jobhunter_pro.ai.scorer.score_jobs") as score_jobs:
                 CollectionOrchestrator({}, db_path=Path(tmp) / "collection.db", registry=registry).run(
                     _options(auto_score=False)
                 )
@@ -275,7 +275,7 @@ class CollectionOrchestratorTests(TestCase):
         })
         with tempfile.TemporaryDirectory() as tmp:
             config = {"_workbench_stop_event": stop_event}
-            with patch("bosshunter.ai.scorer.score_jobs") as score_jobs:
+            with patch("jobhunter_pro.ai.scorer.score_jobs") as score_jobs:
                 result = CollectionOrchestrator(config, db_path=Path(tmp) / "collection.db", registry=registry).run(
                     _options(order=["boss", "zhilian"], auto_score=True)
                 )
@@ -590,7 +590,7 @@ class OrchestrationFlowTests(TestCase):
     """CollectionOrchestrator.run 编排流程。"""
 
     def test_collection_error_becomes_blocked_result(self):
-        from bosshunter.collection.base import CollectionError
+        from jobhunter_pro.collection.base import CollectionError
 
         class _ErrorCollector:
             platform = "boss"
@@ -636,7 +636,7 @@ class OrchestrationFlowTests(TestCase):
         events = []
         registry = CollectorRegistry({"boss": lambda: _FakeCollector("boss", events, [_candidate("boss", "new-1")])})
         with tempfile.TemporaryDirectory() as tmp:
-            with patch("bosshunter.ai.scorer.score_jobs", side_effect=RuntimeError("score crash")):
+            with patch("jobhunter_pro.ai.scorer.score_jobs", side_effect=RuntimeError("score crash")):
                 result = CollectionOrchestrator({}, db_path=Path(tmp) / "test.db", registry=registry).run(
                     _options(auto_score=True)
                 )

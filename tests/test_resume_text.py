@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from bosshunter.web.resume_text import resume_cache_buster, sanitize_resume_text
+from jobhunter_pro.web.resume_text import resume_cache_buster, sanitize_resume_text
 
 
 class SanitizeResumeTextTests(unittest.TestCase):

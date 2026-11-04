@@ -6,16 +6,16 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import Mock
 
-from bosshunter.collection.base import CollectorHooks
-from bosshunter.collection.models import PlatformCollectionRequest
-from bosshunter.collection.orchestrator import CollectionOrchestrator
-from bosshunter.collection.platforms.boss import (
+from jobhunter_pro.collection.base import CollectorHooks
+from jobhunter_pro.collection.models import PlatformCollectionRequest
+from jobhunter_pro.collection.orchestrator import CollectionOrchestrator
+from jobhunter_pro.collection.platforms.boss import (
     BossBrowser, BossCollector, JS_DETECT_COLLECTION_RISK, JS_EXTRACT_DETAIL,
     JS_EXTRACT_LIST, JS_IS_SCROLL_LIST, JS_DISPATCH_LIST_SCROLL, decode_boss_text,
 )
-from bosshunter.collection.registry import CollectorRegistry
-from bosshunter.collection_run_store import get_collection_run, boss_combo_key
-from bosshunter.db import get_db, count_platform_access_today
+from jobhunter_pro.collection.registry import CollectorRegistry
+from jobhunter_pro.collection_run_store import get_collection_run, boss_combo_key
+from jobhunter_pro.db import get_db, count_platform_access_today
 
 
 def card(job_id, salary="\ue033\ue036-\ue036\ue031K·\ue032\ue036薪"):
@@ -152,7 +152,7 @@ class BossSearchRegressionTests(TestCase):
         self.assertEqual([candidate.salary for candidate in self.saved], ["25-50K·15薪"])
 
     def test_salary_decode_failure_action_defaults_to_stop(self):
-        from bosshunter.collection.platforms.boss import _salary_decode_failure_action
+        from jobhunter_pro.collection.platforms.boss import _salary_decode_failure_action
 
         self.assertEqual(_salary_decode_failure_action({}), "stop")
         self.assertEqual(_salary_decode_failure_action(None), "stop")

@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-_new_tab_patcher = patch("bosshunter.ai.resume.new_tab", return_value=None)
+_new_tab_patcher = patch("jobhunter_pro.ai.resume.new_tab", return_value=None)
 
 
 def setUpModule():
@@ -19,7 +19,7 @@ def tearDownModule():
 
 class ResumeArtifactTests(unittest.TestCase):
     def test_prompt_forbids_resume_tailoring_artifacts(self):
-        from bosshunter.ai.resume import RESUME_TAILOR_PROMPT
+        from jobhunter_pro.ai.resume import RESUME_TAILOR_PROMPT
 
         self.assertIn("只输出简历正文", RESUME_TAILOR_PROMPT)
         self.assertIn("不输出任何前言、说明、备注、免责声明", RESUME_TAILOR_PROMPT)
@@ -33,7 +33,7 @@ class ResumeArtifactTests(unittest.TestCase):
         self.assertIn("不要输出JD逐条对照", RESUME_TAILOR_PROMPT)
 
     def test_finds_resume_artifact_phrases(self):
-        from bosshunter.ai.resume import _find_resume_artifacts
+        from jobhunter_pro.ai.resume import _find_resume_artifacts
 
         markdown = "以下内容基于原始简历整理。\n\n## 岗位匹配亮点\n- 补充说明：未虚构。"
 
@@ -45,7 +45,7 @@ class ResumeArtifactTests(unittest.TestCase):
         self.assertIn("未虚构", artifacts)
 
     def test_finds_expanded_resume_artifact_phrases(self):
-        from bosshunter.ai.resume import _find_resume_artifacts
+        from jobhunter_pro.ai.resume import _find_resume_artifacts
 
         markdown = (
             "以下为优化后的简历。\n"
@@ -65,7 +65,7 @@ class ResumeArtifactTests(unittest.TestCase):
         self.assertIn("定制简历", artifacts)
 
     def test_finds_job_tailoring_leakage_phrases(self):
-        from bosshunter.ai.resume import _find_resume_artifacts
+        from jobhunter_pro.ai.resume import _find_resume_artifacts
 
         markdown = (
             "项目与字节岗位中的要求高度相关，可迁移到AI资讯内容质量评估场景，和岗位要求高度匹配。\n"
@@ -85,7 +85,7 @@ class ResumeArtifactTests(unittest.TestCase):
         self.assertIn("无法覆盖", artifacts)
 
     def test_existing_source_placeholders_are_allowed_but_new_or_rewritten_ones_are_blocked(self):
-        from bosshunter.ai.resume import _find_new_placeholders
+        from jobhunter_pro.ai.resume import _find_new_placeholders
 
         base_resume = "# 候选人\n\n电话：[待填写]\n作品集：{{portfolio_url}}\n"
 
@@ -105,7 +105,7 @@ class ResumeArtifactTests(unittest.TestCase):
         )
 
     def test_integrity_checks_report_new_and_missing_fact_values(self):
-        from bosshunter.ai.resume import _find_blocking_integrity_issues
+        from jobhunter_pro.ai.resume import _find_blocking_integrity_issues
 
         base_resume = (
             "# 候选人\n\n"
@@ -128,11 +128,11 @@ class ResumeArtifactTests(unittest.TestCase):
         self.assertTrue(any("模型新增了原始简历中不存在的数据" in issue for issue in issues))
         self.assertTrue(any("50%" in issue for issue in issues))
 
-    @patch("bosshunter.ai.resume._render_pdf")
-    @patch("bosshunter.ai.resume._call_claude")
-    @patch("bosshunter.ai.resume.get_db")
+    @patch("jobhunter_pro.ai.resume._render_pdf")
+    @patch("jobhunter_pro.ai.resume._call_claude")
+    @patch("jobhunter_pro.ai.resume.get_db")
     def test_blocking_validation_failure_is_returned_to_monitor(self, get_db, call_claude, render_pdf):
-        from bosshunter.ai.resume import (
+        from jobhunter_pro.ai.resume import (
             RESUME_COMPLETION_MARKER,
             generate_tailored_resume,
             get_last_resume_failure_reason,
@@ -183,11 +183,11 @@ class ResumeArtifactTests(unittest.TestCase):
         self.assertEqual(call_claude.call_count, 2)
         render_pdf.assert_not_called()
 
-    @patch("bosshunter.ai.resume._render_pdf")
-    @patch("bosshunter.ai.resume._call_claude")
-    @patch("bosshunter.ai.resume.get_db")
+    @patch("jobhunter_pro.ai.resume._render_pdf")
+    @patch("jobhunter_pro.ai.resume._call_claude")
+    @patch("jobhunter_pro.ai.resume.get_db")
     def test_dirty_resume_output_is_still_written_for_user_review(self, get_db, call_claude, render_pdf):
-        from bosshunter.ai.resume import generate_tailored_resume
+        from jobhunter_pro.ai.resume import generate_tailored_resume
 
         db = Mock()
         db.execute.return_value.fetchone.return_value = {
@@ -223,11 +223,11 @@ class ResumeArtifactTests(unittest.TestCase):
 
         render_pdf.assert_called_once()
 
-    @patch("bosshunter.ai.resume._render_pdf")
-    @patch("bosshunter.ai.resume._call_claude")
-    @patch("bosshunter.ai.resume.get_db")
+    @patch("jobhunter_pro.ai.resume._render_pdf")
+    @patch("jobhunter_pro.ai.resume._call_claude")
+    @patch("jobhunter_pro.ai.resume.get_db")
     def test_incomplete_resume_output_is_still_written_for_user_review(self, get_db, call_claude, render_pdf):
-        from bosshunter.ai.resume import generate_tailored_resume
+        from jobhunter_pro.ai.resume import generate_tailored_resume
 
         db = Mock()
         db.execute.return_value.fetchone.return_value = {
@@ -266,11 +266,11 @@ class ResumeArtifactTests(unittest.TestCase):
 
         render_pdf.assert_called_once()
 
-    @patch("bosshunter.ai.resume._render_pdf")
-    @patch("bosshunter.ai.resume._call_claude")
-    @patch("bosshunter.ai.resume.get_db")
+    @patch("jobhunter_pro.ai.resume._render_pdf")
+    @patch("jobhunter_pro.ai.resume._call_claude")
+    @patch("jobhunter_pro.ai.resume.get_db")
     def test_completed_resume_marker_is_removed_before_writing(self, get_db, call_claude, render_pdf):
-        from bosshunter.ai.resume import RESUME_COMPLETION_MARKER, generate_tailored_resume
+        from jobhunter_pro.ai.resume import RESUME_COMPLETION_MARKER, generate_tailored_resume
 
         db = Mock()
         db.execute.return_value.fetchone.return_value = {
@@ -323,13 +323,13 @@ class ResumeArtifactTests(unittest.TestCase):
             self.assertNotIn("格灵深瞳", saved_md)
             self.assertIn("AI科技内容传播、媒体关系和品牌传播经验", saved_md)
 
-    @patch("bosshunter.ai.resume._render_pdf")
-    @patch("bosshunter.ai.resume._call_claude")
-    @patch("bosshunter.ai.resume.get_db")
+    @patch("jobhunter_pro.ai.resume._render_pdf")
+    @patch("jobhunter_pro.ai.resume._call_claude")
+    @patch("jobhunter_pro.ai.resume.get_db")
     def test_nearly_unchanged_resume_is_retried_without_replacing_existing_artifacts(
         self, get_db, call_claude, render_pdf
     ):
-        from bosshunter.ai.resume import RESUME_COMPLETION_MARKER, generate_tailored_resume
+        from jobhunter_pro.ai.resume import RESUME_COMPLETION_MARKER, generate_tailored_resume
 
         db = Mock()
         db.execute.return_value.fetchone.return_value = {
@@ -378,13 +378,13 @@ class ResumeArtifactTests(unittest.TestCase):
         render_pdf.assert_not_called()
         db.commit.assert_not_called()
 
-    @patch("bosshunter.ai.resume._render_pdf")
-    @patch("bosshunter.ai.resume._call_claude")
-    @patch("bosshunter.ai.resume.get_db")
+    @patch("jobhunter_pro.ai.resume._render_pdf")
+    @patch("jobhunter_pro.ai.resume._call_claude")
+    @patch("jobhunter_pro.ai.resume.get_db")
     def test_overlong_resume_output_is_saved_after_compression_retry_still_exceeds_limit(
         self, get_db, call_claude, render_pdf
     ):
-        from bosshunter.ai.resume import RESUME_COMPLETION_MARKER, generate_tailored_resume
+        from jobhunter_pro.ai.resume import RESUME_COMPLETION_MARKER, generate_tailored_resume
 
         db = Mock()
         db.execute.return_value.fetchone.return_value = {
@@ -440,11 +440,11 @@ class ResumeArtifactTests(unittest.TestCase):
         self.assertEqual(call_claude.call_count, 2)
         render_pdf.assert_called_once()
 
-    @patch("bosshunter.ai.resume._render_pdf")
-    @patch("bosshunter.ai.resume._call_claude")
-    @patch("bosshunter.ai.resume.get_db")
+    @patch("jobhunter_pro.ai.resume._render_pdf")
+    @patch("jobhunter_pro.ai.resume._call_claude")
+    @patch("jobhunter_pro.ai.resume.get_db")
     def test_overlong_resume_output_is_retried_with_compression_instruction(self, get_db, call_claude, render_pdf):
-        from bosshunter.ai.resume import RESUME_COMPLETION_MARKER, generate_tailored_resume
+        from jobhunter_pro.ai.resume import RESUME_COMPLETION_MARKER, generate_tailored_resume
 
         db = Mock()
         db.execute.return_value.fetchone.return_value = {
@@ -518,11 +518,11 @@ class ResumeArtifactTests(unittest.TestCase):
         self.assertIn("简历内容过长", retry_prompt)
         self.assertIn("作为优化目标；若与完整保留项目冲突，以保留项目为先", retry_prompt)
 
-    @patch("bosshunter.ai.resume._render_pdf")
-    @patch("bosshunter.ai.resume._call_claude")
-    @patch("bosshunter.ai.resume.get_db")
+    @patch("jobhunter_pro.ai.resume._render_pdf")
+    @patch("jobhunter_pro.ai.resume._call_claude")
+    @patch("jobhunter_pro.ai.resume.get_db")
     def test_pdf_over_page_limit_is_kept_and_marked_ready(self, get_db, call_claude, render_pdf):
-        from bosshunter.ai.resume import RESUME_COMPLETION_MARKER, generate_tailored_resume
+        from jobhunter_pro.ai.resume import RESUME_COMPLETION_MARKER, generate_tailored_resume
 
         db = Mock()
         db.execute.return_value.fetchone.return_value = {
@@ -592,16 +592,16 @@ class ResumeArtifactTests(unittest.TestCase):
 
 class ResumePdfRuntimeTests(unittest.TestCase):
     def setUp(self):
-        pagination = patch("bosshunter.ai.resume._balance_pdf_pages")
+        pagination = patch("jobhunter_pro.ai.resume._balance_pdf_pages")
         self.balance_pages = pagination.start()
         self.addCleanup(pagination.stop)
 
-    @patch("bosshunter.ai.resume.wait_for_load", return_value=True)
-    @patch("bosshunter.ai.resume.close_tab")
-    @patch("bosshunter.ai.resume.print_pdf")
-    @patch("bosshunter.ai.resume.new_tab")
+    @patch("jobhunter_pro.ai.resume.wait_for_load", return_value=True)
+    @patch("jobhunter_pro.ai.resume.close_tab")
+    @patch("jobhunter_pro.ai.resume.print_pdf")
+    @patch("jobhunter_pro.ai.resume.new_tab")
     def test_render_pdf_via_cdp_uses_browser_facade(self, new_tab, print_pdf, close_tab, wait_for_load):
-        from bosshunter.ai.resume import _render_pdf_via_cdp
+        from jobhunter_pro.ai.resume import _render_pdf_via_cdp
 
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "resume.pdf"
@@ -619,14 +619,14 @@ class ResumePdfRuntimeTests(unittest.TestCase):
         self.balance_pages.assert_called_once_with("target-1")
         close_tab.assert_called_once_with("target-1")
 
-    @patch("bosshunter.ai.resume.wait_for_load", return_value=True)
-    @patch("bosshunter.ai.resume.close_tab")
-    @patch("bosshunter.ai.resume.print_pdf")
-    @patch("bosshunter.ai.resume.new_tab", return_value="target-1")
+    @patch("jobhunter_pro.ai.resume.wait_for_load", return_value=True)
+    @patch("jobhunter_pro.ai.resume.close_tab")
+    @patch("jobhunter_pro.ai.resume.print_pdf")
+    @patch("jobhunter_pro.ai.resume.new_tab", return_value="target-1")
     def test_render_pdf_via_cdp_resolves_relative_output_for_runtime(
         self, new_tab, print_pdf, close_tab, wait_for_load
     ):
-        from bosshunter.ai.resume import _render_pdf_via_cdp
+        from jobhunter_pro.ai.resume import _render_pdf_via_cdp
 
         def write_pdf(_target, destination):
             self.assertTrue(destination.is_absolute())
@@ -643,14 +643,14 @@ class ResumePdfRuntimeTests(unittest.TestCase):
         self.assertTrue(result)
         print_pdf.assert_called_once_with("target-1", expected_output)
 
-    @patch("bosshunter.ai.resume.wait_for_load", return_value=True)
-    @patch("bosshunter.ai.resume.close_tab")
-    @patch("bosshunter.ai.resume.print_pdf")
-    @patch("bosshunter.ai.resume.new_tab")
+    @patch("jobhunter_pro.ai.resume.wait_for_load", return_value=True)
+    @patch("jobhunter_pro.ai.resume.close_tab")
+    @patch("jobhunter_pro.ai.resume.print_pdf")
+    @patch("jobhunter_pro.ai.resume.new_tab")
     def test_render_pdf_via_cdp_rejects_missing_output_file(
         self, new_tab, print_pdf, close_tab, wait_for_load
     ):
-        from bosshunter.ai.resume import _render_pdf_via_cdp
+        from jobhunter_pro.ai.resume import _render_pdf_via_cdp
 
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "missing.pdf"
@@ -665,9 +665,9 @@ class ResumePdfRuntimeTests(unittest.TestCase):
         self.assertEqual(print_pdf.call_count, 2)
         self.assertEqual(close_tab.call_count, 2)
 
-    @patch("bosshunter.ai.resume._render_pdf_via_cdp", return_value=False)
+    @patch("jobhunter_pro.ai.resume._render_pdf_via_cdp", return_value=False)
     def test_render_pdf_does_not_emit_fontless_fallback_pdf(self, render_via_cdp):
-        from bosshunter.ai.resume import _render_pdf
+        from jobhunter_pro.ai.resume import _render_pdf
 
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "resume.pdf"
@@ -681,7 +681,7 @@ class ResumePdfRuntimeTests(unittest.TestCase):
 
 class ResumePaginationTests(unittest.TestCase):
     def test_section_preference_does_not_leave_large_uneven_blank_areas(self):
-        from bosshunter.ai.resume import _balanced_page_starts
+        from jobhunter_pro.ai.resume import _balanced_page_starts
 
         boundaries = [
             {"y": 0}, {"y": 600, "section": True}, {"y": 800},
@@ -690,7 +690,7 @@ class ResumePaginationTests(unittest.TestCase):
         self.assertEqual(_balanced_page_starts(boundaries, 1000), [2, 4])
 
     def test_display_aliases_preserve_custom_sections_order_and_all_content(self):
-        from bosshunter.ai.resume import _resume_display_markdown
+        from jobhunter_pro.ai.resume import _resume_display_markdown
 
         source = (
             "# 候选人\n\n## 个人优势\n- 真实成果\n\n"
@@ -707,7 +707,7 @@ class ResumePaginationTests(unittest.TestCase):
         self.assertEqual(_resume_display_markdown(result), expected)
 
     def test_layout_keeps_metadata_links_and_narrative_paragraphs(self):
-        from bosshunter.ai.resume import _resume_html
+        from jobhunter_pro.ai.resume import _resume_html
 
         html = _resume_html(
             "# 候选人\n\n邮箱：candidate@example.com\n"
@@ -725,7 +725,7 @@ class ResumePaginationTests(unittest.TestCase):
         self.assertIn('<h3>项目二</h3>\n\n<p>2020年完成了有来源的交付。</p>', html)
 
     def test_balances_sparse_last_page_at_section_boundary(self):
-        from bosshunter.ai.resume import _balanced_page_starts
+        from jobhunter_pro.ai.resume import _balanced_page_starts
 
         boundaries = [
             {"y": 0}, {"y": 350}, {"y": 700, "section": True},
@@ -734,19 +734,19 @@ class ResumePaginationTests(unittest.TestCase):
         self.assertEqual(_balanced_page_starts(boundaries, 1000), [2])
 
     def test_adds_page_when_indivisible_groups_need_it(self):
-        from bosshunter.ai.resume import _balanced_page_starts
+        from jobhunter_pro.ai.resume import _balanced_page_starts
 
         self.assertEqual(_balanced_page_starts([{"y": y} for y in (0, 600, 1200, 1800)], 1000), [1, 2])
 
     def test_short_or_oversized_content_uses_native_pagination(self):
-        from bosshunter.ai.resume import _balanced_page_starts
+        from jobhunter_pro.ai.resume import _balanced_page_starts
 
         self.assertEqual(_balanced_page_starts([{"y": y} for y in (0, 300, 500)], 1000), [])
         self.assertEqual(_balanced_page_starts([{"y": y} for y in (0, 1200, 1500)], 1000), [])
 
-    @patch("bosshunter.ai.resume.evaluate")
+    @patch("jobhunter_pro.ai.resume.evaluate")
     def test_applies_measured_break_without_changing_font_or_text(self, evaluate):
-        from bosshunter.ai.resume import _balance_pdf_pages
+        from jobhunter_pro.ai.resume import _balance_pdf_pages
 
         evaluate.side_effect = [[{"y": 0}, {"y": 700, "section": True}, {"y": 1400}], True]
         _balance_pdf_pages("resume-tab")
@@ -755,7 +755,7 @@ class ResumePaginationTests(unittest.TestCase):
         self.assertIn("breakBefore", evaluate.call_args_list[1].args[1])
 
     def test_cjk_bold_labels_render_without_markdown_markers(self):
-        from bosshunter.ai.resume import _resume_html
+        from jobhunter_pro.ai.resume import _resume_html
 
         html = _resume_html("- **团队管理：**组织5人团队\n- **付费实践：**不到一个月30人")
         self.assertIn("<strong>团队管理</strong>：组织5人团队", html)

@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from bosshunter.ai import greeter
-from bosshunter.ai.greeter import _generate_greeting_once
+from jobhunter_pro.ai import greeter
+from jobhunter_pro.ai.greeter import _generate_greeting_once
 
 
 def test_greeting_preference_is_bounded_and_cannot_replace_fixed_rules():
@@ -14,7 +14,7 @@ def test_greeting_preference_is_bounded_and_cannot_replace_fixed_rules():
         captured["prompt"] = prompt
         return "自然简短的招呼语"
 
-    with patch("bosshunter.ai.greeter._call_claude", side_effect=fake_call):
+    with patch("jobhunter_pro.ai.greeter._call_claude", side_effect=fake_call):
         result = _generate_greeting_once(
             {
                 "title": "产品经理",
@@ -51,7 +51,7 @@ def test_greeting_prompt_uses_positive_match_reason_only():
         captured["prompt"] = prompt
         return "我有后端项目经验，和岗位方向比较匹配，可以进一步沟通。"
 
-    with patch("bosshunter.ai.greeter._call_claude", side_effect=fake_call):
+    with patch("jobhunter_pro.ai.greeter._call_claude", side_effect=fake_call):
         result = _generate_greeting_once(
             {
                 "title": "后端开发",
@@ -88,7 +88,7 @@ def test_graduation_context_uses_education_end_year_as_class_year():
 
     resume = "教育经历\n某大学 软件工程 本科 2022.09-2026.06\n项目经历\n后台系统"
 
-    with patch("bosshunter.ai.greeter.date", FixedDate):
+    with patch("jobhunter_pro.ai.greeter.date", FixedDate):
         context = greeter._parse_graduation_context(resume)
 
     assert "2026 届" in context

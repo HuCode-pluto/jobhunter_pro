@@ -1,6 +1,6 @@
-# BossHunter 完整上手指南
+# JobHunter Pro 完整上手指南
 
-本指南适合第一次安装和运行 BossHunter。首页只保留最短启动路径，平台登录、浏览器连接和排错细节统一放在这里。
+本指南适合第一次安装和运行 JobHunter Pro。首页只保留最短启动路径，平台登录、浏览器连接和排错细节统一放在这里。
 
 ## 1. 准备环境
 
@@ -21,10 +21,10 @@ Windows 用户请直接按下面的「Windows 首次安装与桌面快捷方式�
 首次使用请先在 frontend 目录构建前端产物（`dist` 不随 git 仓库跟踪，需本地按需构建），再安装 Python 包；否则 `pip install -e .` 会报 `frontend/dist` 缺失。
 
 ```bash
-git clone https://github.com/shengjidaguai-china/BossHunter.git
-cd BossHunter
-npm --prefix src/bosshunter/web/frontend ci
-npm --prefix src/bosshunter/web/frontend run build
+git clone https://github.com/shengjidaguai-china/JobHunter Pro.git
+cd JobHunter Pro
+npm --prefix src/jobhunter_pro/web/frontend ci
+npm --prefix src/jobhunter_pro/web/frontend run build
 pip install -e .
 ```
 
@@ -41,24 +41,24 @@ pip install -e ".[pdf]"
 3. 下载源码，在仓库自己的虚拟环境中安装。所有命令均在同一个 PowerShell 窗口依次执行：
 
 ```powershell
-git clone https://github.com/shengjidaguai-china/BossHunter.git
-cd BossHunter
+git clone https://github.com/shengjidaguai-china/JobHunter Pro.git
+cd JobHunter Pro
 py -m venv .venv
-npm.cmd --prefix src/bosshunter/web/frontend ci
-npm.cmd --prefix src/bosshunter/web/frontend run build
+npm.cmd --prefix src/jobhunter_pro/web/frontend ci
+npm.cmd --prefix src/jobhunter_pro/web/frontend run build
 .\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m bosshunter.main --help
+.\.venv\Scripts\python.exe -m jobhunter_pro.main --help
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\install_desktop_shortcut.ps1
 ```
 
 如果没有 `py`，但 `python --version` 显示 3.10+，可将创建虚拟环境的命令改为 `python -m venv .venv`。这里直接调用虚拟环境的 Python，不需要执行 `Activate.ps1`，也不需要修改系统执行策略。`Bypass` 仅用于当前脚本进程。
 
-4. 双击桌面的 **BossHunter** 快捷方式。现有启动器会打开 `%LOCALAPPDATA%\BossHunterChrome` 专用 Chrome 配置目录，启用 `9222` 远程调试，运行 Browser Runtime 连接检查，再打开 `http://127.0.0.1:8686` 工作台。请在这个专用 Chrome 窗口中手动登录招聘平台。
+4. 双击桌面的 **JobHunter Pro** 快捷方式。现有启动器会打开 `%LOCALAPPDATA%\JobHunter ProChrome` 专用 Chrome 配置目录，启用 `9222` 远程调试，运行 Browser Runtime 连接检查，再打开 `http://127.0.0.1:8686` 工作台。请在这个专用 Chrome 窗口中手动登录招聘平台。
 
-启动器优先使用 PATH 中的 `bosshunter`，其次使用仓库 `.venv\Scripts\python.exe`，最后才尝试系统 Python。若电脑上已有其他 BossHunter 安装，首次排错可明确指定本次安装的 Python：
+启动器优先使用 PATH 中的 `jobhunter_pro`，其次使用仓库 `.venv\Scripts\python.exe`，最后才尝试系统 Python。若电脑上已有其他 JobHunter Pro 安装，首次排错可明确指定本次安装的 Python：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\start_bosshunter.ps1 -PythonPath .\.venv\Scripts\python.exe
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\start_jobhunter_pro.ps1 -PythonPath .\.venv\Scripts\python.exe
 ```
 
 快捷方式以后台方式启动，不要求保留终端。请保持专用 Chrome 窗口开启；快捷方式仅打开 Chrome 和工作台，不会自动登录或开始投递。移动仓库后请重新运行快捷方式安装脚本。启动器的详细说明见 [Windows 一键启动器](windows-launcher.md)。
@@ -73,17 +73,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\windows\start_boss
 brew install python node@22
 
 # 克隆并创建虚拟环境
-git clone https://github.com/shengjidaguai-china/BossHunter.git
-cd BossHunter
+git clone https://github.com/shengjidaguai-china/JobHunter Pro.git
+cd JobHunter Pro
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
-bosshunter web
+jobhunter_pro web
 ```
 
 注意：
 
-- 新开的终端需要先执行 `source .venv/bin/activate`，否则找不到 `bosshunter` 命令；可把这一行追加到 `~/.zshrc` 简化日常使用。
+- 新开的终端需要先执行 `source .venv/bin/activate`，否则找不到 `jobhunter_pro` 命令；可把这一行追加到 `~/.zshrc` 简化日常使用。
 - 如果 `brew install node@22` 后 `node` 仍不可用，按 brew 提示把 keg-only 路径加入 PATH（`export PATH="$(brew --prefix node@22)/bin:$PATH"`）。
 - 希望双击启动（专用 Chrome 调试实例 + 本地工作台），见 [macOS 一键启动器](macos-launcher.md)。
 
@@ -95,16 +95,16 @@ Windows 桌面快捷方式已经完成远程调试启动，不需要再次运行
 
 ```bash
 # macOS
-open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir="$HOME/.bosshunter-chrome"
+open -na "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir="$HOME/.jobhunter_pro-chrome"
 
 # Linux
-google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.bosshunter-chrome"
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.jobhunter_pro-chrome"
 ```
 
 Windows 手动启动（PowerShell；Chrome 安装位置不同时调整可执行文件路径）：
 
 ```powershell
-& "$env:ProgramFiles\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 "--user-data-dir=$env:LOCALAPPDATA\BossHunterChrome"
+& "$env:ProgramFiles\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 "--user-data-dir=$env:LOCALAPPDATA\JobHunter ProChrome"
 ```
 
 使用启动参数时会打开一个独立 Chrome 窗口。请在这个窗口中登录要使用的招聘平台，并在任务期间保持窗口开启；其他 Chrome 窗口的登录状态不会自动复用。
@@ -114,7 +114,7 @@ Chrome 136+ 在使用默认用户目录时会忽略 `--remote-debugging-port`，
 ## 4. 完成本地配置
 
 ```bash
-bosshunter web
+jobhunter_pro web
 ```
 
 浏览器会打开 `http://127.0.0.1:8686`。Windows 用户通过快捷方式已经打开工作台，无需再启动一个 Web 进程。请在本地面板完成：
@@ -133,8 +133,8 @@ YAML 仍使用 `throttle.send_windows: ["09:00-12:00", "14:00-16:00"]` 字符串
 ## 5. 检查连接
 
 ```bash
-bosshunter ai-status
-bosshunter connect
+jobhunter_pro ai-status
+jobhunter_pro connect
 ```
 
 - `ai-status` 安全检查 AI 服务，不显示完整 Key。
@@ -145,8 +145,8 @@ bosshunter connect
 Windows 未激活虚拟环境时，对应检查命令为：
 
 ```powershell
-.\.venv\Scripts\python.exe -m bosshunter.main ai-status
-.\.venv\Scripts\python.exe -m bosshunter.main connect
+.\.venv\Scripts\python.exe -m jobhunter_pro.main ai-status
+.\.venv\Scripts\python.exe -m jobhunter_pro.main connect
 ```
 
 ## 6. 开始运行
@@ -154,7 +154,7 @@ Windows 未激活虚拟环境时，对应检查命令为：
 确认简历、AI 和 Chrome 均已就绪后运行：
 
 ```bash
-bosshunter run
+jobhunter_pro run
 ```
 
 完整流程为：采集岗位 → AI 评分 → 人工确认投递清单 → 生成招呼语 → 低频发送 → 监听回复。
@@ -172,10 +172,10 @@ bosshunter run
 | `py`、`node` 或 `git` 无法识别 | 安装相应依赖，重新打开 PowerShell，确认版本命令能运行。 |
 | `npm.ps1` 或 `Activate.ps1` 被执行策略阻止 | 使用上述 `npm.cmd` 和 `.venv\Scripts\python.exe` 命令；无需全局放开执行策略。 |
 | 安装时报 `frontend/dist` 缺失 | 在仓库根目录先完成 `npm.cmd ... ci` 和 `npm.cmd ... run build`，成功后再安装 Python 包。 |
-| `No module named bosshunter` 或找不到 BossHunter | 用 `.\.venv\Scripts\python.exe -m pip install -e .` 安装，并通过启动器的 `-PythonPath` 参数确认使用同一个环境。 |
-| 快捷方式无反应、工作台打不开 | 在仓库根目录直接运行上述 `start_bosshunter.ps1` 命令查看报错。确认 `http://127.0.0.1:8686` 是否已有工作台；避免反复启动多个进程。 |
-| Chrome 连接失败或 `9222` 未就绪 | 关闭 BossHunter 专用 Chrome 后重新启动快捷方式；仅在专用窗口登录。可访问 `http://127.0.0.1:9222/json/version` 查看端点是否就绪，再运行 `connect`。连接检查失败时启动器仍会打开工作台，不代表连接已成功。 |
-| Chrome 用户目录含空格时启动失败 | 用第 3 节的 PowerShell 手动命令启动专用 Chrome，再运行 `.\.venv\Scripts\python.exe -m bosshunter.main web`；命令保留了完整的用户目录参数。 |
+| `No module named jobhunter_pro` 或找不到 JobHunter Pro | 用 `.\.venv\Scripts\python.exe -m pip install -e .` 安装，并通过启动器的 `-PythonPath` 参数确认使用同一个环境。 |
+| 快捷方式无反应、工作台打不开 | 在仓库根目录直接运行上述 `start_jobhunter_pro.ps1` 命令查看报错。确认 `http://127.0.0.1:8686` 是否已有工作台；避免反复启动多个进程。 |
+| Chrome 连接失败或 `9222` 未就绪 | 关闭 JobHunter Pro 专用 Chrome 后重新启动快捷方式；仅在专用窗口登录。可访问 `http://127.0.0.1:9222/json/version` 查看端点是否就绪，再运行 `connect`。连接检查失败时启动器仍会打开工作台，不代表连接已成功。 |
+| Chrome 用户目录含空格时启动失败 | 用第 3 节的 PowerShell 手动命令启动专用 Chrome，再运行 `.\.venv\Scripts\python.exe -m jobhunter_pro.main web`；命令保留了完整的用户目录参数。 |
 | 时间段无法保存或配置无法加载 | 按提示修改 YAML 或界面的时段，使用两位小时和分钟，确保起止有效且不重复、不重叠。不要通过清空列表规避错误。 |
 | 窗口外没有发送或任务已停止 | 检查电脑的日期、时区和配置的时段；到开始时间后启动任务，不要使用强制发送绕过窗口。 |
 

@@ -1,6 +1,6 @@
 ---
 name: 候选维护者申请
-about: 申请加入 BossHunter 候选维护者观察期
+about: 申请加入 JobHunter Pro 候选维护者观察期
 title: "[Maintainer] 候选维护者申请 - GitHub 用户名"
 labels: maintainer-candidate
 assignees: ''

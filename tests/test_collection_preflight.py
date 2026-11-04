@@ -1,8 +1,8 @@
 from unittest import TestCase
 from unittest.mock import patch
 
-from bosshunter.web.preflight import collect_preflight_checks
-from bosshunter.web.server import _preflight_messages
+from jobhunter_pro.web.preflight import collect_preflight_checks
+from jobhunter_pro.web.server import _preflight_messages
 
 
 class CollectionPreflightTests(TestCase):
@@ -20,8 +20,8 @@ class CollectionPreflightTests(TestCase):
                 },
             },
         }
-        with patch("bosshunter.web.preflight.check_ai_connection") as check_ai, patch(
-            "bosshunter.web.preflight.check_browser_connection",
+        with patch("jobhunter_pro.web.preflight.check_ai_connection") as check_ai, patch(
+            "jobhunter_pro.web.preflight.check_browser_connection",
             return_value=[{"id": "browser", "status": "pass", "message": "ok", "detail": "ok", "action": ""}],
         ):
             checks = collect_preflight_checks("collect", {"ai": {"api_key": "saved-but-not-used"}}, options)

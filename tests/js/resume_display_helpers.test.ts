@@ -20,7 +20,7 @@ import {
   resumePdfToggleLabel,
   resumeSizeLabel,
   shouldSyncResumePath,
-} from '../../src/bosshunter/web/frontend/src/lib/resumeDisplay.ts'
+} from '../../src/jobhunter_pro/web/frontend/src/lib/resumeDisplay.ts'
 
 assert.equal(nextResumeContentVisible(false), true)
 assert.equal(nextResumeContentVisible(true), false)

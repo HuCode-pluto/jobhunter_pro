@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   interviewTarget, jobForInterview, jobMarkdown, startInterviewHandoff,
-} from '../../src/bosshunter/web/frontend/src/lib/interviewHandoff.ts'
+} from '../../src/jobhunter_pro/web/frontend/src/lib/interviewHandoff.ts'
 
 const job = { company: '合成公司', title: '测试工程师', city: '测试城', salary: '10-15K', education: '本科', jd: '完整岗位职责', resume_path: 'private', greeting: 'private', hr_name: 'private', api_key: 'private' }
 

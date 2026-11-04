@@ -42,7 +42,7 @@ import urllib.request
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-PROXY_SCRIPT = REPO_ROOT / "src" / "bosshunter" / "browser" / "runtime" / "cdp-proxy.mjs"
+PROXY_SCRIPT = REPO_ROOT / "src" / "jobhunter_pro" / "browser" / "runtime" / "cdp-proxy.mjs"
 
 _WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
@@ -291,9 +291,9 @@ class BrowserRuntimeDiscoveryTests(unittest.TestCase):
         env = os.environ.copy()
         env["HOME"] = str(self.home)
         env["LOCALAPPDATA"] = str(self.home)
-        env["BOSSHUNTER_BROWSER_PROXY_PORT"] = str(self.proxy_port)
-        env["BOSSHUNTER_CHROME_PORTS"] = str(chrome_ports if chrome_ports is not None else self.fake.port)
-        env["BOSSHUNTER_ENABLE_PORT_GUARD"] = "false"
+        env["JOBHUNTER_PRO_BROWSER_PROXY_PORT"] = str(self.proxy_port)
+        env["JOBHUNTER_PRO_CHROME_PORTS"] = str(chrome_ports if chrome_ports is not None else self.fake.port)
+        env["JOBHUNTER_PRO_ENABLE_PORT_GUARD"] = "false"
         self.process = subprocess.Popen(
             [self.node, str(PROXY_SCRIPT)],
             env=env,
@@ -334,7 +334,7 @@ class BrowserRuntimeDiscoveryTests(unittest.TestCase):
         base = self._wait_for_targets()
 
         _, health = _http_json(base + "/health")
-        self.assertEqual(health["runtime"], "bosshunter")
+        self.assertEqual(health["runtime"], "jobhunter_pro")
         self.assertEqual(health["chromePort"], self.fake.port)
 
     def test_ws_only_devtools_active_port_is_used(self):
@@ -356,7 +356,7 @@ class BrowserRuntimeDiscoveryTests(unittest.TestCase):
             if health.get("browserProduct"):
                 break
             time.sleep(0.3)
-        self.assertEqual(health["runtime"], "bosshunter")
+        self.assertEqual(health["runtime"], "jobhunter_pro")
         self.assertEqual(health["chromePort"], self.fake.port)
         self.assertEqual(health["connected"], True)
         self.assertEqual(health["browserProduct"], "Chrome/124.0.0.0")

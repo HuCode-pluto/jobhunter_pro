@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 import yaml
 
-from bosshunter.config import load_config
+from jobhunter_pro.config import load_config
 
 
 class BrowserRuntimeConfigTests(unittest.TestCase):
@@ -40,24 +40,24 @@ class BrowserRuntimeConfigTests(unittest.TestCase):
 
 class BrowserRuntimeManagerTests(unittest.TestCase):
     def test_get_runtime_url_uses_configured_host_and_port(self):
-        from bosshunter.browser.runtime import get_runtime_url
+        from jobhunter_pro.browser.runtime import get_runtime_url
 
         url = get_runtime_url({"browser": {"proxy_host": "localhost", "proxy_port": 4567}})
 
         self.assertEqual(url, "http://localhost:4567")
 
     def test_runtime_script_path_points_to_bundled_proxy(self):
-        from bosshunter.browser.runtime import get_runtime_script_path
+        from jobhunter_pro.browser.runtime import get_runtime_script_path
 
         path = get_runtime_script_path()
 
         self.assertEqual(path.name, "cdp-proxy.mjs")
         self.assertTrue(path.exists())
 
-    @patch("bosshunter.browser.runtime.subprocess.run")
-    @patch("bosshunter.browser.runtime._candidate_node_executables")
+    @patch("jobhunter_pro.browser.runtime.subprocess.run")
+    @patch("jobhunter_pro.browser.runtime._candidate_node_executables")
     def test_check_node_available_returns_version(self, candidates, run):
-        from bosshunter.browser.runtime import check_node_available
+        from jobhunter_pro.browser.runtime import check_node_available
 
         candidates.return_value = ["node"]
         run.return_value = Mock(returncode=0, stdout="v22.1.0\n")
@@ -68,11 +68,11 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
         self.assertEqual(result["version"], "v22.1.0")
         self.assertEqual(result["executable"], "node")
 
-    @patch("bosshunter.browser.runtime.subprocess.run")
-    @patch("bosshunter.browser.runtime.Path.is_file", return_value=True)
-    @patch("bosshunter.browser.runtime._candidate_node_executables")
+    @patch("jobhunter_pro.browser.runtime.subprocess.run")
+    @patch("jobhunter_pro.browser.runtime.Path.is_file", return_value=True)
+    @patch("jobhunter_pro.browser.runtime._candidate_node_executables")
     def test_check_node_available_reuses_ai_bundled_node(self, candidates, is_file, run):
-        from bosshunter.browser.runtime import check_node_available
+        from jobhunter_pro.browser.runtime import check_node_available
 
         candidates.return_value = ["node", "/ai/runtime/node/bin/node"]
         run.side_effect = [
@@ -86,11 +86,11 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
         self.assertEqual(result["version"], "v24.14.0")
         self.assertEqual(result["executable"], "/ai/runtime/node/bin/node")
 
-    @patch("bosshunter.browser.runtime.subprocess.run")
-    @patch("bosshunter.browser.runtime.Path.is_file", return_value=True)
-    @patch("bosshunter.browser.runtime._candidate_node_executables")
+    @patch("jobhunter_pro.browser.runtime.subprocess.run")
+    @patch("jobhunter_pro.browser.runtime.Path.is_file", return_value=True)
+    @patch("jobhunter_pro.browser.runtime._candidate_node_executables")
     def test_check_node_available_skips_unsupported_version(self, candidates, is_file, run):
-        from bosshunter.browser.runtime import check_node_available
+        from jobhunter_pro.browser.runtime import check_node_available
 
         candidates.return_value = ["/old/node", "/new/node"]
         run.side_effect = [
@@ -103,12 +103,12 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
         self.assertTrue(result["available"])
         self.assertEqual(result["executable"], "/new/node")
 
-    @patch("bosshunter.browser.runtime.httpx.get")
-    def test_runtime_targets_returns_array_from_bosshunter_runtime(self, http_get):
-        from bosshunter.browser.runtime import runtime_targets
+    @patch("jobhunter_pro.browser.runtime.httpx.get")
+    def test_runtime_targets_returns_array_from_jobhunter_pro_runtime(self, http_get):
+        from jobhunter_pro.browser.runtime import runtime_targets
 
         health = Mock(status_code=200)
-        health.json.return_value = {"status": "ok", "runtime": "bosshunter"}
+        health.json.return_value = {"status": "ok", "runtime": "jobhunter_pro"}
         targets = Mock(status_code=200)
         targets.json.return_value = [{"targetId": "abc"}]
         http_get.side_effect = [health, targets]
@@ -121,9 +121,9 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
         self.assertEqual(http_get.call_args_list[1].args, ("http://127.0.0.1:3456/targets",))
         self.assertEqual(http_get.call_args_list[1].kwargs, {"timeout": 5, "trust_env": False})
 
-    @patch("bosshunter.browser.runtime.httpx.get")
-    def test_runtime_targets_rejects_non_bosshunter_runtime(self, http_get):
-        from bosshunter.browser.runtime import runtime_targets
+    @patch("jobhunter_pro.browser.runtime.httpx.get")
+    def test_runtime_targets_rejects_non_jobhunter_pro_runtime(self, http_get):
+        from jobhunter_pro.browser.runtime import runtime_targets
 
         health = Mock(status_code=200)
         health.json.return_value = {"status": "ok", "runtime": "web-access"}
@@ -138,11 +138,11 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
             trust_env=False,
         )
 
-    @patch("bosshunter.browser.runtime.runtime_targets")
-    @patch("bosshunter.browser.runtime.start_runtime")
-    @patch("bosshunter.browser.runtime.check_node_available")
+    @patch("jobhunter_pro.browser.runtime.runtime_targets")
+    @patch("jobhunter_pro.browser.runtime.start_runtime")
+    @patch("jobhunter_pro.browser.runtime.check_node_available")
     def test_ensure_runtime_starts_builtin_runtime_when_auto_start_enabled(self, check_node, start_runtime, runtime_targets):
-        from bosshunter.browser.runtime import ensure_runtime
+        from jobhunter_pro.browser.runtime import ensure_runtime
 
         check_node.return_value = {"available": True, "version": "v22.1.0"}
         runtime_targets.side_effect = [None, [{"targetId": "abc"}]]
@@ -153,16 +153,16 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
         start_runtime.assert_called_once()
         self.assertEqual(start_runtime.call_args.args[1], "node")
 
-    @patch("bosshunter.browser.runtime.time.sleep")
-    @patch("bosshunter.browser.runtime._is_port_available", return_value=True)
-    @patch("bosshunter.browser.runtime.runtime_health", return_value=None)
-    @patch("bosshunter.browser.runtime.runtime_targets")
-    @patch("bosshunter.browser.runtime.start_runtime")
-    @patch("bosshunter.browser.runtime.check_node_available", return_value={"available": True})
+    @patch("jobhunter_pro.browser.runtime.time.sleep")
+    @patch("jobhunter_pro.browser.runtime._is_port_available", return_value=True)
+    @patch("jobhunter_pro.browser.runtime.runtime_health", return_value=None)
+    @patch("jobhunter_pro.browser.runtime.runtime_targets")
+    @patch("jobhunter_pro.browser.runtime.start_runtime")
+    @patch("jobhunter_pro.browser.runtime.check_node_available", return_value={"available": True})
     def test_startup_probes_once_even_when_deadline_has_expired(
         self, check_node, start_runtime, runtime_targets, runtime_health, available, sleep
     ):
-        from bosshunter.browser.runtime import ensure_runtime
+        from jobhunter_pro.browser.runtime import ensure_runtime
 
         for ready in ([], None):
             with self.subTest(ready=ready):
@@ -173,13 +173,13 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
                 self.assertEqual(runtime_targets.call_count, 2)
                 sleep.assert_not_called()
 
-    @patch("bosshunter.browser.runtime.time.sleep")
-    @patch("bosshunter.browser.runtime._is_port_available")
-    @patch("bosshunter.browser.runtime.runtime_health")
-    @patch("bosshunter.browser.runtime.runtime_targets")
-    @patch("bosshunter.browser.runtime.start_runtime")
-    @patch("bosshunter.browser.runtime.check_node_available")
-    def test_ensure_runtime_uses_next_free_port_when_default_has_non_bosshunter_service(
+    @patch("jobhunter_pro.browser.runtime.time.sleep")
+    @patch("jobhunter_pro.browser.runtime._is_port_available")
+    @patch("jobhunter_pro.browser.runtime.runtime_health")
+    @patch("jobhunter_pro.browser.runtime.runtime_targets")
+    @patch("jobhunter_pro.browser.runtime.start_runtime")
+    @patch("jobhunter_pro.browser.runtime.check_node_available")
+    def test_ensure_runtime_uses_next_free_port_when_default_has_non_jobhunter_pro_service(
         self,
         check_node,
         start_runtime,
@@ -188,7 +188,7 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
         is_port_available,
         sleep,
     ):
-        from bosshunter.browser.runtime import ensure_runtime, get_runtime_url
+        from jobhunter_pro.browser.runtime import ensure_runtime, get_runtime_url
 
         config = {"browser": {"runtime": "builtin", "auto_start_proxy": True, "proxy_host": "127.0.0.1", "proxy_port": 3456}}
         check_node.return_value = {"available": True, "version": "v22.1.0"}
@@ -206,12 +206,12 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
         self.assertEqual(start_runtime.call_args.args[1], "node")
         self.assertEqual(get_runtime_url(), "http://127.0.0.1:3457")
 
-    @patch("bosshunter.browser.runtime.time.sleep")
-    @patch("bosshunter.browser.runtime._is_port_available")
-    @patch("bosshunter.browser.runtime.runtime_health")
-    @patch("bosshunter.browser.runtime.runtime_targets")
-    @patch("bosshunter.browser.runtime.start_runtime")
-    @patch("bosshunter.browser.runtime.check_node_available")
+    @patch("jobhunter_pro.browser.runtime.time.sleep")
+    @patch("jobhunter_pro.browser.runtime._is_port_available")
+    @patch("jobhunter_pro.browser.runtime.runtime_health")
+    @patch("jobhunter_pro.browser.runtime.runtime_targets")
+    @patch("jobhunter_pro.browser.runtime.start_runtime")
+    @patch("jobhunter_pro.browser.runtime.check_node_available")
     def test_ensure_runtime_uses_next_free_port_when_default_is_system_reserved(
         self,
         check_node,
@@ -221,7 +221,7 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
         is_port_available,
         sleep,
     ):
-        from bosshunter.browser.runtime import ensure_runtime
+        from jobhunter_pro.browser.runtime import ensure_runtime
 
         config = {"browser": {"runtime": "builtin", "auto_start_proxy": True, "proxy_host": "127.0.0.1", "proxy_port": 3456}}
         check_node.return_value = {"available": True, "version": "v22.1.0"}
@@ -238,37 +238,37 @@ class BrowserRuntimeManagerTests(unittest.TestCase):
         self.assertEqual(start_runtime.call_args.args[0]["proxy_port"], 3457)
         self.assertEqual(start_runtime.call_args.args[1], "node")
 
-    @patch("bosshunter.browser.runtime.subprocess.Popen")
-    def test_start_runtime_sets_bosshunter_environment(self, popen):
-        from bosshunter.browser.runtime import start_runtime
+    @patch("jobhunter_pro.browser.runtime.subprocess.Popen")
+    def test_start_runtime_sets_jobhunter_pro_environment(self, popen):
+        from jobhunter_pro.browser.runtime import start_runtime
 
         with patch.dict(os.environ, {}, clear=True):
             start_runtime({"browser": {"proxy_port": 4567, "chrome_ports": [9222, 9333], "enable_port_guard": False}})
 
         env = popen.call_args.kwargs["env"]
-        self.assertEqual(env["BOSSHUNTER_BROWSER_PROXY_PORT"], "4567")
-        self.assertEqual(env["BOSSHUNTER_CHROME_PORTS"], "9222,9333")
-        self.assertEqual(env["BOSSHUNTER_ENABLE_PORT_GUARD"], "false")
+        self.assertEqual(env["JOBHUNTER_PRO_BROWSER_PROXY_PORT"], "4567")
+        self.assertEqual(env["JOBHUNTER_PRO_CHROME_PORTS"], "9222,9333")
+        self.assertEqual(env["JOBHUNTER_PRO_ENABLE_PORT_GUARD"], "false")
 
 
 class BrowserRuntimeSourceTests(unittest.TestCase):
     def test_cdp_proxy_fetches_browser_websocket_url_for_fallback_ports(self):
-        script = Path(__file__).parents[1] / "src" / "bosshunter" / "browser" / "runtime" / "cdp-proxy.mjs"
+        script = Path(__file__).parents[1] / "src" / "jobhunter_pro" / "browser" / "runtime" / "cdp-proxy.mjs"
         source = script.read_text(encoding="utf-8")
 
         self.assertIn("/json/version", source)
         self.assertIn("webSocketDebuggerUrl", source)
 
-    def test_cdp_proxy_only_reuses_bosshunter_runtime_on_occupied_port(self):
-        script = Path(__file__).parents[1] / "src" / "bosshunter" / "browser" / "runtime" / "cdp-proxy.mjs"
+    def test_cdp_proxy_only_reuses_jobhunter_pro_runtime_on_occupied_port(self):
+        script = Path(__file__).parents[1] / "src" / "jobhunter_pro" / "browser" / "runtime" / "cdp-proxy.mjs"
         source = script.read_text(encoding="utf-8")
 
-        self.assertIn("const RUNTIME_NAME = 'bosshunter'", source)
+        self.assertIn("const RUNTIME_NAME = 'jobhunter_pro'", source)
         self.assertIn("health.runtime === RUNTIME_NAME", source)
         self.assertNotIn("data.includes", source)
 
     def test_cdp_proxy_supports_background_tabs_and_platform_select_all(self):
-        script = Path(__file__).parents[1] / "src" / "bosshunter" / "browser" / "runtime" / "cdp-proxy.mjs"
+        script = Path(__file__).parents[1] / "src" / "jobhunter_pro" / "browser" / "runtime" / "cdp-proxy.mjs"
         source = script.read_text(encoding="utf-8")
 
         self.assertIn("q.background === '1'", source)
@@ -278,19 +278,19 @@ class BrowserRuntimeSourceTests(unittest.TestCase):
         self.assertIn("pathname === '/key'", source)
 
     def test_cdp_proxy_returns_new_target_without_waiting_for_full_page_load(self):
-        script = Path(__file__).parents[1] / "src" / "bosshunter" / "browser" / "runtime" / "cdp-proxy.mjs"
+        script = Path(__file__).parents[1] / "src" / "jobhunter_pro" / "browser" / "runtime" / "cdp-proxy.mjs"
         source = script.read_text(encoding="utf-8")
         new_route = source.split("pathname === '/new'", 1)[1].split("pathname === '/close'", 1)[0]
 
         self.assertIn("ensureSession(targetId)", new_route)
         self.assertNotIn("waitForLoad", new_route)
 
-    def test_check_runtime_requires_bosshunter_runtime_identity(self):
-        script = Path(__file__).parents[1] / "src" / "bosshunter" / "browser" / "runtime" / "check-runtime.mjs"
+    def test_check_runtime_requires_jobhunter_pro_runtime_identity(self):
+        script = Path(__file__).parents[1] / "src" / "jobhunter_pro" / "browser" / "runtime" / "check-runtime.mjs"
         source = script.read_text(encoding="utf-8")
 
         self.assertIn("/health", source)
-        self.assertIn("runtime === 'bosshunter'", source)
+        self.assertIn("runtime === 'jobhunter_pro'", source)
 
 
 if __name__ == "__main__":

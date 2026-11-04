@@ -12,7 +12,7 @@ assignees: ''
 
 ## 复现步骤
 
-1. 运行命令 `bosshunter ...`
+1. 运行命令 `jobhunter_pro ...`
 2. ...
 3. 出现错误
 
@@ -30,7 +30,7 @@ assignees: ''
 - Python 版本: [如 3.11.5]
 - Node.js 版本: [如 22.x]
 - Chrome 版本: [如 125.x]
-- BossHunter 版本: [运行 `bosshunter --version`]
+- JobHunter Pro 版本: [运行 `jobhunter_pro --version`]
 
 ## 补充信息
 

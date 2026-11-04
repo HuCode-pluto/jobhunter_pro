@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "bosshunter"
-version = "2.4.0"
-description = "BOSS直聘智能求职Agent - 端到端自动化求职工具"
+name = "jobhunter_pro"
+version = "0.1.0"
+description = "JobHunter Pro - 求职自动化 + 手动求职流水线（采集/评分/投递/面试复盘/技能地图）"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = [
@@ -26,23 +26,27 @@ dependencies = [
 pdf = [
     "xhtml2pdf>=0.2.11",
 ]
+asr = [
+    "faster-whisper>=1.0",
+]
 
 [project.scripts]
-bosshunter = "bosshunter.main:cli"
+jobhunter = "jobhunter_pro.main:cli"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/bosshunter"]
+packages = ["src/jobhunter_pro"]
 artifacts = [
-    "src/bosshunter/browser/runtime/*.mjs",
-    "src/bosshunter/browser/runtime/site-patterns/*.md",
-    "src/bosshunter/data/*.json",
+    "src/jobhunter_pro/browser/runtime/*.mjs",
+    "src/jobhunter_pro/browser/runtime/site-patterns/*.md",
+    "src/jobhunter_pro/data/*.json",
+    "src/jobhunter_pro/data/*.sql",
 ]
 
 # The frontend build output is no longer tracked in VCS (built on demand),
 # so it must be force-included to ship inside the wheel. Run
-# `npm ci && npm run build` in src/bosshunter/web/frontend before building.
+# `npm ci && npm run build` in src/jobhunter_pro/web/frontend before building.
 [tool.hatch.build.targets.wheel.force-include]
-"src/bosshunter/web/frontend/dist" = "bosshunter/web/frontend/dist"
+"src/jobhunter_pro/web/frontend/dist" = "jobhunter_pro/web/frontend/dist"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

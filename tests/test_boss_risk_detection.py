@@ -5,7 +5,7 @@ import shutil
 import subprocess
 import unittest
 
-from bosshunter.collection.platforms.boss import JS_DETECT_COLLECTION_RISK
+from jobhunter_pro.collection.platforms.boss import JS_DETECT_COLLECTION_RISK
 
 _NODE_HARNESS = """
 const fs = require('node:fs');

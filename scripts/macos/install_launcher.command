@@ -1,7 +1,7 @@
 #!/bin/bash
-# BossHunter macOS launcher installer.
+# JobHunter Pro macOS launcher installer.
 # Double-click this file in Finder (or run it in a terminal) to create a
-# `BossHunter.command` file on the Desktop. Double-clicking that Desktop file
+# `JobHunter Pro.command` file on the Desktop. Double-clicking that Desktop file
 # later starts the dedicated Chrome profile and the local workbench together.
 #
 # Mirrors scripts/windows/install_desktop_shortcut.ps1. Uses repository-relative
@@ -10,12 +10,12 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LAUNCHER="$SCRIPT_DIR/start_bosshunter.sh"
+LAUNCHER="$SCRIPT_DIR/start_jobhunter_pro.sh"
 DESKTOP="$HOME/Desktop"
-COMMAND_FILE="$DESKTOP/BossHunter.command"
+COMMAND_FILE="$DESKTOP/JobHunter Pro.command"
 
 if [ ! -f "$LAUNCHER" ]; then
-	echo "[BossHunter] Launcher script not found: $LAUNCHER" >&2
+	echo "[JobHunter Pro] Launcher script not found: $LAUNCHER" >&2
 	read -r -p "Press Enter to exit..." _
 	exit 1
 fi
@@ -34,6 +34,6 @@ chmod +x "$COMMAND_FILE"
 xattr -d com.apple.quarantine "$LAUNCHER" 2>/dev/null || true
 xattr -d com.apple.quarantine "$COMMAND_FILE" 2>/dev/null || true
 
-echo "[BossHunter] Created double-click launcher: $COMMAND_FILE"
-echo "[BossHunter] Double-click it anytime to open the BossHunter workbench with its dedicated Chrome profile."
+echo "[JobHunter Pro] Created double-click launcher: $COMMAND_FILE"
+echo "[JobHunter Pro] Double-click it anytime to open the JobHunter Pro workbench with its dedicated Chrome profile."
 read -r -p "Press Enter to close this window..." _

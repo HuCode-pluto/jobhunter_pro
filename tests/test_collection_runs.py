@@ -3,14 +3,14 @@ import tempfile
 from pathlib import Path
 from unittest import TestCase
 
-from bosshunter.collection_run_store import (
+from jobhunter_pro.collection_run_store import (
     create_collection_run,
     get_collection_run,
     mark_orphaned_collection_runs_stopped,
     update_collection_run,
     claim_boss_resume,
 )
-from bosshunter.db import get_db, insert_job
+from jobhunter_pro.db import get_db, insert_job
 
 
 class CollectionRunAndMigrationTests(TestCase):

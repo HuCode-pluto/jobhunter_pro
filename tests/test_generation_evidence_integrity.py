@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock, patch
 
-from bosshunter.ai import greeter, resume
-from bosshunter.ai.credentials import AIRequestError
+from jobhunter_pro.ai import greeter, resume
+from jobhunter_pro.ai.credentials import AIRequestError
 
 
 def test_context_retry_keeps_middle_and_tail_evidence():
@@ -49,7 +49,7 @@ def test_style_length_hint_does_not_trigger_rewrite_when_disabled():
 
 
 def test_low_quality_long_draft_is_saved_without_rewrite_or_version_selection(tmp_path):
-    from bosshunter.db import get_db, insert_job, update_job_status
+    from jobhunter_pro.db import get_db, insert_job, update_job_status
 
     db_path = tmp_path / "jobs.db"
     db = get_db(db_path)

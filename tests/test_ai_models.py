@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import httpx
 
-from bosshunter.ai.credentials import AIRequestError, list_ai_models
+from jobhunter_pro.ai.credentials import AIRequestError, list_ai_models
 
 
 class AIModelListTests(unittest.TestCase):
@@ -29,7 +29,7 @@ class AIModelListTests(unittest.TestCase):
                     status = 404 if service == "deepseek" and len(calls) == 1 else 200
                     return httpx.Response(status, json=payload, request=httpx.Request("GET", url))
 
-                with patch("bosshunter.ai.credentials.httpx.get", side_effect=get):
+                with patch("jobhunter_pro.ai.credentials.httpx.get", side_effect=get):
                     result = list_ai_models({"ai": {"service": service, "base_url": base, "api_key": "test-secret"}})
                 self.assertEqual(result, ["a-model", "z-model"])
                 self.assertEqual([call[0] for call in calls], urls)
@@ -50,18 +50,18 @@ class AIModelListTests(unittest.TestCase):
         ]:
             with self.subTest(status=status, payload=payload):
                 response = httpx.Response(status, json=payload, request=httpx.Request("GET", config["ai"]["base_url"]))
-                with patch("bosshunter.ai.credentials.httpx.get", return_value=response), self.assertRaises(AIRequestError) as error:
+                with patch("jobhunter_pro.ai.credentials.httpx.get", return_value=response), self.assertRaises(AIRequestError) as error:
                     list_ai_models(config)
                 self.assertEqual(error.exception.kind, kind)
                 self.assertNotIn("test-secret", str(error.exception))
-        with patch("bosshunter.ai.credentials.httpx.get", side_effect=httpx.ReadTimeout("test-secret")), self.assertRaises(AIRequestError) as error:
+        with patch("jobhunter_pro.ai.credentials.httpx.get", side_effect=httpx.ReadTimeout("test-secret")), self.assertRaises(AIRequestError) as error:
             list_ai_models(config)
         self.assertEqual(error.exception.kind, "network")
         self.assertNotIn("test-secret", str(error.exception))
         response = httpx.Response(200, json={"data": []}, request=httpx.Request("GET", config["ai"]["base_url"]))
-        with patch("bosshunter.ai.credentials.httpx.get", return_value=response):
+        with patch("jobhunter_pro.ai.credentials.httpx.get", return_value=response):
             self.assertEqual(list_ai_models(config), [])
-        with patch.dict("os.environ", {}, clear=True), patch("bosshunter.ai.credentials.httpx.get") as get:
+        with patch.dict("os.environ", {}, clear=True), patch("jobhunter_pro.ai.credentials.httpx.get") as get:
             for base in ("", "file:///tmp/models", "https://user:secret@example.com", "https://example.com?key=secret"):
                 with self.subTest(base=base), self.assertRaises(AIRequestError):
                     list_ai_models({"ai": {"service": "custom", "base_url": base}})

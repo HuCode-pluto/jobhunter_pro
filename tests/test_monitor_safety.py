@@ -6,8 +6,8 @@ from pathlib import Path
 from threading import Thread
 from unittest.mock import MagicMock, patch
 
-from bosshunter.db import add_history, get_db, insert_job, update_job_status
-from bosshunter.throttle import RequestThrottle
+from jobhunter_pro.db import add_history, get_db, insert_job, update_job_status
+from jobhunter_pro.throttle import RequestThrottle
 
 
 def _job(job_id: str, hr_name: str | None = None) -> dict:
@@ -30,7 +30,7 @@ def _job(job_id: str, hr_name: str | None = None) -> dict:
 
 class MonitorThrottleTests(unittest.TestCase):
     def test_boss_operation_multiplier_applies_to_monitor_cycle_wait(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         config = {
             "collection": {"collection_delay_multiplier": 1.5},
@@ -41,7 +41,7 @@ class MonitorThrottleTests(unittest.TestCase):
         self.assertEqual(monitor.get_effective_monitor_interval_minutes(config), 45)
 
     def test_boss_operation_multiplier_applies_to_monitor_page_requests(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         config = {
             "collection": {"collection_delay_multiplier": 1.5},
@@ -60,7 +60,7 @@ class MonitorThrottleTests(unittest.TestCase):
         request_throttle.assert_called_once_with(90, 270)
 
     def test_manual_chat_open_can_request_a_foreground_tab(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         with patch.object(monitor, "new_tab", return_value="chat-target") as new_tab:
             target_id = monitor._open_monitor_tab(
@@ -76,7 +76,7 @@ class MonitorThrottleTests(unittest.TestCase):
         )
 
     def test_manual_reply_suggestion_is_counted_as_pending_not_failed(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         item = {"job": {"id": "pending-job"}, "conversation": {}}
         with patch.object(monitor, "check_replies", return_value=[item]), \
@@ -90,7 +90,7 @@ class MonitorThrottleTests(unittest.TestCase):
         self.assertEqual(summary["failed"], 0)
 
     def test_single_detected_reply_processing_disables_every_outbound_path(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         with patch.object(
             monitor,
@@ -116,7 +116,7 @@ class MonitorThrottleTests(unittest.TestCase):
         close_target.assert_called_once_with(safe_config)
 
     def test_boss_operation_multiplier_is_bounded_and_tolerates_invalid_values(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         self.assertEqual(
             monitor.get_boss_operation_interval_multiplier(
@@ -134,10 +134,10 @@ class MonitorThrottleTests(unittest.TestCase):
     def test_mark_makes_configured_request_interval_effective(self):
         throttle = RequestThrottle(delay_min=60, delay_max=60)
 
-        with patch("bosshunter.throttle.time.time", return_value=100), \
-             patch("bosshunter.throttle.random.gauss", return_value=60), \
-             patch("bosshunter.throttle.random.random", return_value=1), \
-             patch("bosshunter.throttle.time.sleep") as sleep:
+        with patch("jobhunter_pro.throttle.time.time", return_value=100), \
+             patch("jobhunter_pro.throttle.random.gauss", return_value=60), \
+             patch("jobhunter_pro.throttle.random.random", return_value=1), \
+             patch("jobhunter_pro.throttle.time.sleep") as sleep:
             throttle.mark()
             stopped = throttle.wait()
 
@@ -145,7 +145,7 @@ class MonitorThrottleTests(unittest.TestCase):
         sleep.assert_called_once_with(60)
 
     def test_every_monitor_tab_open_marks_and_waits_after_the_first(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         events = []
 
@@ -175,7 +175,7 @@ class MonitorThrottleTests(unittest.TestCase):
         self.assertEqual(events, ["open", "mark", "wait", "open", "mark"])
 
     def test_web_monitor_reuses_one_live_chat_list_tab(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         config = {
             "_monitor_reuse_chat_tab": True,
@@ -194,7 +194,7 @@ class MonitorThrottleTests(unittest.TestCase):
         close_tab.assert_called_once_with("chat-target")
 
     def test_web_monitor_selects_scanned_row_without_opening_another_page(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         conversation = {
             "_chat_target_id": "chat-target",
@@ -229,7 +229,7 @@ class MonitorThrottleTests(unittest.TestCase):
 
 class MonitorIdempotencyAndLimitTests(unittest.TestCase):
     def test_single_job_filter_limits_detection_to_the_requested_job(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         db = MagicMock()
         jobs = [_job("job-one"), _job("job-two")]
@@ -248,7 +248,7 @@ class MonitorIdempotencyAndLimitTests(unittest.TestCase):
         db.close.assert_called_once()
 
     def test_same_unresolved_reply_is_skipped_but_new_hr_message_is_processed(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         original_messages = [
             {"sender": "me", "text": "你好，我对岗位感兴趣。"},
@@ -260,7 +260,7 @@ class MonitorIdempotencyAndLimitTests(unittest.TestCase):
         ]
 
         with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "data" / "bosshunter.db"
+            db_path = Path(tmp) / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             try:
                 insert_job(db, _job("dedup"))
@@ -314,7 +314,7 @@ class MonitorIdempotencyAndLimitTests(unittest.TestCase):
         generate_reply.assert_called_once()
 
     def test_same_auto_reply_is_not_sent_twice_but_later_hr_turn_is_processed(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         original_messages = [
             {"sender": "me", "text": "你好，我对岗位感兴趣。"},
@@ -326,7 +326,7 @@ class MonitorIdempotencyAndLimitTests(unittest.TestCase):
         ]
 
         with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "data" / "bosshunter.db"
+            db_path = Path(tmp) / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             try:
                 insert_job(db, _job("auto-round"))
@@ -391,10 +391,10 @@ class MonitorIdempotencyAndLimitTests(unittest.TestCase):
         send_message.assert_called_once_with("later-target", "第二轮自动回复", config)
 
     def test_chat_list_skips_same_pending_before_opening_and_caps_new_items(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "data" / "bosshunter.db"
+            db_path = Path(tmp) / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             try:
                 for job_id in ("one", "two", "three"):
@@ -453,10 +453,10 @@ class MonitorIdempotencyAndLimitTests(unittest.TestCase):
         self.assertEqual(detected_actions, ["hr_reply_detected"])
 
     def test_web_chat_scan_carries_shared_target_into_processing(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "data" / "bosshunter.db"
+            db_path = Path(tmp) / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             try:
                 insert_job(db, _job("shared"))
@@ -494,10 +494,10 @@ class MonitorIdempotencyAndLimitTests(unittest.TestCase):
         self.assertEqual(results[0]["conversation"]["_chat_target_id"], "chat-target")
 
     def test_chat_list_includes_unrecorded_outbound_reply_but_skips_plain_sent_job(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "data" / "bosshunter.db"
+            db_path = Path(tmp) / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             try:
                 insert_job(db, _job("greeting"))
@@ -538,10 +538,10 @@ class MonitorIdempotencyAndLimitTests(unittest.TestCase):
 
 class MonitorRiskTests(unittest.TestCase):
     def test_captcha_stops_cycle_and_records_only_safe_risk_detail(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "data" / "bosshunter.db"
+            db_path = Path(tmp) / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             try:
                 insert_job(db, _job("risk"))
@@ -570,10 +570,10 @@ class MonitorRiskTests(unittest.TestCase):
         self.assertEqual(events, [{"event_type": "monitor_captcha", "detail": "监测检测到验证码，已停止"}])
 
     def test_consecutive_page_failures_stop_at_configured_threshold(self):
-        from bosshunter.executor import monitor
+        from jobhunter_pro.executor import monitor
 
         with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "data" / "bosshunter.db"
+            db_path = Path(tmp) / "data" / "jobhunter_pro.db"
 
             def open_db():
                 return get_db(db_path)
@@ -596,7 +596,7 @@ class MonitorRiskTests(unittest.TestCase):
 
 class FullFlowMonitorCooldownTests(unittest.TestCase):
     def test_full_flow_initial_cooldown_is_cancellable_before_first_scan(self):
-        from bosshunter.web.tasks import WorkbenchTask, wait_for_initial_monitor_cooldown
+        from jobhunter_pro.web.tasks import WorkbenchTask, wait_for_initial_monitor_cooldown
 
         task = WorkbenchTask(id="cooldown", mode="full", label="运行全流程")
         result = []

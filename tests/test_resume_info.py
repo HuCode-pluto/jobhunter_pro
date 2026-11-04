@@ -8,7 +8,7 @@ import time
 import unittest
 from pathlib import Path
 
-from bosshunter.web.resume_info import (
+from jobhunter_pro.web.resume_info import (
 	build_resume_info_payload,
 	configured_resume_exists,
 	format_file_size,
@@ -178,7 +178,7 @@ class LoadResumeInfoTests(unittest.TestCase):
 	def test_load_encrypted_pdf_only_raises_upload_error(self):
 		from pypdf import PdfWriter
 
-		from bosshunter.web.resume_upload import ResumeUploadError
+		from jobhunter_pro.web.resume_upload import ResumeUploadError
 
 		writer = PdfWriter()
 		writer.add_blank_page(width=612, height=792)
@@ -196,7 +196,7 @@ class LoadResumeInfoTests(unittest.TestCase):
 	def test_load_scanned_pdf_only_raises_upload_error(self):
 		from pypdf import PdfWriter
 
-		from bosshunter.web.resume_upload import ResumeUploadError
+		from jobhunter_pro.web.resume_upload import ResumeUploadError
 
 		writer = PdfWriter()
 		writer.add_blank_page(width=612, height=792)

@@ -1,8 +1,8 @@
-# BossHunter 项目治理
+# JobHunter Pro 项目治理
 
-本文档说明 BossHunter 的维护责任、权限边界、候选维护者晋升方式和离任机制。
+本文档说明 JobHunter Pro 的维护责任、权限边界、候选维护者晋升方式和离任机制。
 
-BossHunter 允许 AI 辅助实现、测试和整理代码，但维护权限、风险判断、审批和发布责任必须由明确的人类维护者承担。
+JobHunter Pro 允许 AI 辅助实现、测试和整理代码，但维护权限、风险判断、审批和发布责任必须由明确的人类维护者承担。
 
 ## 治理原则
 
@@ -120,7 +120,7 @@ GitHub 的 `Write` 权限作用于整个仓库；正式维护者拥有相同的�
 2. 对维护治理文件以及发送、账号风控、凭据、数据库、任务整体暂停/恢复、人工确认、CI 和发布等高风险路径，开启“需要 Code Owner Review”和“新提交后撤销旧批准”。
 3. 高风险 PR 必须获得两名不同的非作者正式维护者批准；项目负责人 `@powerycy` 的有效批准按一人计数，本人参与编写的技术改动不得自审计票。`CODEOWNERS` 列出包括项目负责人在内的当前合格正式维护者池。
 4. 由于 `CODEOWNERS` 本身不能强制两次批准：若所有 PR 都接受双人审批，可在分支保护或 Ruleset 中将批准数量设为 2；若只要求高风险 PR 双人审批，则需增加按改动路径判定的阻塞检查。远程规则完成配置前，合并人必须人工核对两次有效批准。
-5. GitHub Ruleset 指定的审核团队为 `@shengjidaguai-china/bosshunter-maintainers`，其有效成员应与正式技术维护者名单一致，包括 `@powerycy`。加入团队的邀请必须被接受后才能计入团队审核人数；仓库 Write/Admin 权限本身不代替团队成员资格。团队与 CODEOWNERS 均须在身份变化后同步核验。
+5. GitHub Ruleset 指定的审核团队为 `@shengjidaguai-china/jobhunter_pro-maintainers`，其有效成员应与正式技术维护者名单一致，包括 `@powerycy`。加入团队的邀请必须被接受后才能计入团队审核人数；仓库 Write/Admin 权限本身不代替团队成员资格。团队与 CODEOWNERS 均须在身份变化后同步核验。
 
 ## 规则变更
 

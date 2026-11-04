@@ -3,10 +3,10 @@ from threading import Event
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from bosshunter.collection.base import CollectionBlockedError, CollectorHooks
-from bosshunter.collection.models import JobCandidate, PlatformCollectionRequest
-from bosshunter.collection.orchestrator import normalize_collection_options
-from bosshunter.collection.platforms.job51 import (
+from jobhunter_pro.collection.base import CollectionBlockedError, CollectorHooks
+from jobhunter_pro.collection.models import JobCandidate, PlatformCollectionRequest
+from jobhunter_pro.collection.orchestrator import normalize_collection_options
+from jobhunter_pro.collection.platforms.job51 import (
     API_PAGE_SIZE,
     HARD_MAX_PAGES,
     Job51Browser,
@@ -23,7 +23,7 @@ from bosshunter.collection.platforms.job51 import (
     get_51job_city_code,
     load_51job_city_snapshot,
 )
-from bosshunter.collection.text import clean_job_description
+from jobhunter_pro.collection.text import clean_job_description
 
 
 def _ok_body(items: list, total: int | None = None) -> str:
@@ -208,7 +208,7 @@ class Job51CitySnapshotTests(TestCase):
 
     def test_city_snapshot_loads(self):
         snap = load_51job_city_snapshot()
-        self.assertEqual(snap["schema"], "bosshunter.51job_cities.v1")
+        self.assertEqual(snap["schema"], "jobhunter_pro.51job_cities.v1")
         self.assertGreaterEqual(len(snap["cities"]), 2)
 
     def test_fail_closed_for_unknown_city(self):
@@ -281,10 +281,10 @@ class CollectionFlowSafetyTests(TestCase):
         }
 
         with (
-            patch("bosshunter.collection.platforms.job51.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.job51.get_page_progress", return_value=0),
             patch.object(Job51Collector, "_plan_probe_pages", return_value=[1]),
             patch.object(collector, "_fetch_page", return_value=blocked),
-            patch("bosshunter.collection.platforms.job51.mark_combo_collected") as mark_complete,
+            patch("jobhunter_pro.collection.platforms.job51.mark_combo_collected") as mark_complete,
         ):
             with self.assertRaises(CollectionBlockedError) as raised:
                 collector._collect_keyword(
@@ -328,12 +328,12 @@ class CollectionFlowSafetyTests(TestCase):
             return analysis
 
         with (
-            patch("bosshunter.collection.platforms.job51.get_page_progress", return_value=0),
-            patch("bosshunter.collection.platforms.job51.upsert_page_progress",
+            patch("jobhunter_pro.collection.platforms.job51.get_page_progress", return_value=0),
+            patch("jobhunter_pro.collection.platforms.job51.upsert_page_progress",
                   side_effect=lambda _conn, _source, _city, _keyword, page: checkpoints.append(page)),
-            patch("bosshunter.collection.platforms.job51.mark_combo_collected") as mark_complete,
-            patch("bosshunter.collection.platforms.job51.delete_page_progress"),
-            patch("bosshunter.collection.platforms.job51._wait_or_stop", return_value=False),
+            patch("jobhunter_pro.collection.platforms.job51.mark_combo_collected") as mark_complete,
+            patch("jobhunter_pro.collection.platforms.job51.delete_page_progress"),
+            patch("jobhunter_pro.collection.platforms.job51._wait_or_stop", return_value=False),
             patch.object(Job51Collector, "_plan_probe_pages", return_value=[3]),
             patch.object(collector, "_fetch_page", side_effect=fetch_page),
             patch.object(collector, "_would_be_collected", return_value=True),
@@ -361,8 +361,8 @@ class CollectionFlowSafetyTests(TestCase):
                 close_tab = Mock(return_value=True)
                 collector = Job51Collector(browser=Job51Browser(close_tab=close_tab))
                 with (
-                    patch("bosshunter.collection.platforms.job51.SendWindowChecker.is_active", return_value=True),
-                    patch("bosshunter.collection.platforms.job51.should_take_day_off", return_value=False),
+                    patch("jobhunter_pro.collection.platforms.job51.SendWindowChecker.is_active", return_value=True),
+                    patch("jobhunter_pro.collection.platforms.job51.should_take_day_off", return_value=False),
                     patch.object(collector, "_ensure_host_tab", return_value=("host-tab", owned)),
                     patch.object(collector, "_collect_keyword"),
                 ):
@@ -680,7 +680,7 @@ class FetchPageTests(TestCase):
         sleep.assert_called_once_with(8)
 
     def test_persistent_silence_slows_the_rhythm_before_giving_up(self):
-        from bosshunter.collection.platforms.job51 import _ApiRateLimiter
+        from jobhunter_pro.collection.platforms.job51 import _ApiRateLimiter
 
         limiter = _ApiRateLimiter(total_requests=10)
         gap, per_min = limiter._gap_range, limiter._per_min_limit
@@ -771,7 +771,7 @@ class CollectEntryTests(TestCase):
             "51job", ["AI"], ["上海"], {"上海": "020000"}, max_pages=1,
         )
         collector = Job51Collector(config={"throttle": {"send_windows": ["00:00-00:01"]}})
-        with patch("bosshunter.collection.platforms.job51.SendWindowChecker.is_active", return_value=False):
+        with patch("jobhunter_pro.collection.platforms.job51.SendWindowChecker.is_active", return_value=False):
             result = collector.collect(request, self._hooks())
         self.assertEqual(result.status, "completed")
         self.assertEqual(result.reason_code, "outside_window")
@@ -782,8 +782,8 @@ class CollectEntryTests(TestCase):
         )
         collector = Job51Collector(config={"throttle": {"day_off_probability": 1.0}})
         with (
-            patch("bosshunter.collection.platforms.job51.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.job51.should_take_day_off", return_value=True),
+            patch("jobhunter_pro.collection.platforms.job51.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.job51.should_take_day_off", return_value=True),
         ):
             result = collector.collect(request, self._hooks())
         self.assertEqual(result.status, "completed")
@@ -804,8 +804,8 @@ class CollectEntryTests(TestCase):
         )
         collector = Job51Collector()
         with (
-            patch("bosshunter.collection.platforms.job51.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.job51.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.job51.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.job51.should_take_day_off", return_value=False),
             patch.object(collector, "_ensure_host_tab", return_value=("host", True)),
         ):
             result = collector.collect(request, hooks)
@@ -879,21 +879,21 @@ class WaitOrStopTests(TestCase):
     """_wait_or_stop — 等待/停止逻辑。"""
 
     def test_sleeps_when_no_stop_event(self):
-        from bosshunter.collection.platforms.job51 import _wait_or_stop
+        from jobhunter_pro.collection.platforms.job51 import _wait_or_stop
         slept = []
-        with patch("bosshunter.collection.platforms.job51.time.sleep", side_effect=slept.append):
+        with patch("jobhunter_pro.collection.platforms.job51.time.sleep", side_effect=slept.append):
             result = _wait_or_stop(None, 0.01)
         self.assertFalse(result)
         self.assertEqual(slept, [0.01])
 
     def test_returns_true_when_event_set(self):
-        from bosshunter.collection.platforms.job51 import _wait_or_stop
+        from jobhunter_pro.collection.platforms.job51 import _wait_or_stop
         stop = Event()
         stop.set()
         self.assertTrue(_wait_or_stop(stop, 10))
 
     def test_returns_false_when_event_not_set(self):
-        from bosshunter.collection.platforms.job51 import _wait_or_stop
+        from jobhunter_pro.collection.platforms.job51 import _wait_or_stop
         stop = Event()
         self.assertFalse(_wait_or_stop(stop, 0.01))
 
@@ -916,8 +916,8 @@ class CollectSalaryParseErrorTests(TestCase):
         )
         collector = Job51Collector(config={"profile": {"salary_min": "abc", "salary_max": "xyz"}})
         with (
-            patch("bosshunter.collection.platforms.job51.SendWindowChecker.is_active", return_value=True),
-            patch("bosshunter.collection.platforms.job51.should_take_day_off", return_value=False),
+            patch("jobhunter_pro.collection.platforms.job51.SendWindowChecker.is_active", return_value=True),
+            patch("jobhunter_pro.collection.platforms.job51.should_take_day_off", return_value=False),
             patch.object(collector, "_ensure_host_tab", return_value=("host", True)),
             patch.object(collector, "_collect_keyword"),
         ):
@@ -927,7 +927,7 @@ class CollectSalaryParseErrorTests(TestCase):
 
 class Job51FilterRegressionTests(TestCase):
     def test_salary_matches_shared_prefilter_and_preserves_config(self):
-        from bosshunter.ai.prefilter import quick_score
+        from jobhunter_pro.ai.prefilter import quick_score
 
         for ratio in (1.0, 1.5, 2.0):
             for unknown in (False, True):
@@ -956,8 +956,8 @@ class Job51FilterRegressionTests(TestCase):
     def test_original_pipeline_saves_overlap_jobs_and_spaced_titles(self):
         import tempfile
         from pathlib import Path
-        from bosshunter.collection.orchestrator import CollectionOrchestrator
-        from bosshunter.db import get_db, insert_job
+        from jobhunter_pro.collection.orchestrator import CollectionOrchestrator
+        from jobhunter_pro.db import get_db, insert_job
 
         salaries = ["10-15K", "10-20K", "12-20K", "15-25K", "20-30K", "5K", "50K", "12-20K"]
         items = [{"jobId": str(i), "jobName": "IT 运维工程师" if i != 7 else "财务主管",
@@ -972,11 +972,11 @@ class Job51FilterRegressionTests(TestCase):
             insert_job(conn, Job51Collector._item_to_candidate(items[2], "上海", "020000", "IT运维").as_job_record())
             conn.close()
             with (
-                patch("bosshunter.collection.platforms.job51.Job51Browser", return_value=browser),
+                patch("jobhunter_pro.collection.platforms.job51.Job51Browser", return_value=browser),
                 patch.object(Job51Collector, "_ensure_host_tab", return_value=("fake", False)),
-                patch("bosshunter.collection.platforms.job51.SendWindowChecker.is_active", return_value=True),
-                patch("bosshunter.collection.platforms.job51.should_take_day_off", return_value=False),
-                patch("bosshunter.collection.platforms.job51._wait_or_stop", return_value=False),
+                patch("jobhunter_pro.collection.platforms.job51.SendWindowChecker.is_active", return_value=True),
+                patch("jobhunter_pro.collection.platforms.job51.should_take_day_off", return_value=False),
+                patch("jobhunter_pro.collection.platforms.job51._wait_or_stop", return_value=False),
                 patch.object(_ApiRateLimiter, "wait_before_request", return_value=True),
             ):
                 result = CollectionOrchestrator({"profile": profile}, db_path=db_path).run({

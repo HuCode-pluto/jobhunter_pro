@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 import pytest
 
-from bosshunter.ai import scorer
-from bosshunter.ai.prefilter import quick_score
+from jobhunter_pro.ai import scorer
+from jobhunter_pro.ai.prefilter import quick_score
 
 
 def _job(salary="12-15K"):

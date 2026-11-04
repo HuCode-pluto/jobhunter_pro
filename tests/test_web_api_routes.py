@@ -15,7 +15,7 @@ import yaml
 from pypdf import PdfWriter
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
-from bosshunter.db import (
+from jobhunter_pro.db import (
     add_history,
     edit_job_greeting,
     get_db,
@@ -31,13 +31,13 @@ from bosshunter.db import (
     update_job_score,
     update_job_status,
 )
-from bosshunter.throttle import SendWindowChecker
-from bosshunter.web import server
+from jobhunter_pro.throttle import SendWindowChecker
+from jobhunter_pro.web import server
 from threading import Event, Lock
 
-from bosshunter.scoring_run_store import create_scoring_run, get_scoring_run, update_scoring_run
-from bosshunter.collection_run_store import create_collection_run, update_collection_run
-from bosshunter.web.tasks import TaskAlreadyRunningError, WorkbenchTask, WorkbenchTaskRunner
+from jobhunter_pro.scoring_run_store import create_scoring_run, get_scoring_run, update_scoring_run
+from jobhunter_pro.collection_run_store import create_collection_run, update_collection_run
+from jobhunter_pro.web.tasks import TaskAlreadyRunningError, WorkbenchTask, WorkbenchTaskRunner
 
 # datetime.UTC 自 Python 3.11 才提供，而 pyproject.toml 声明支持 >=3.10
 try:
@@ -109,7 +109,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_outsourcing_rules_refresh_old_jobs_in_every_review_api(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, {**_job("outsourcing-review"), "company": "测试供应商"})
                 update_job_score(db, "outsourcing-review", 85, "synthetic score")
@@ -143,7 +143,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_bad_outsourcing_json_cannot_break_job_api(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("malformed-outsourcing"))
                 server.set_base_dir(base_dir)
@@ -161,7 +161,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_outsourcing_and_greeting_metadata_coexist_across_review_apis(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, {**_job("outsourcing-greeting"), "company": "中软国际有限公司"})
                 update_job_status(db, "outsourcing-greeting", "ready")
@@ -298,7 +298,7 @@ class WebApiRouteTests(unittest.TestCase):
         self.assertNotIn("private-secret", body)
 
     def _upload_resume(self, filename: str, content: bytes, content_type: str):
-        boundary = "----BossHunterResumeUpload"
+        boundary = "----JobHunter ProResumeUpload"
         body = (
             (
                 f'--{boundary}\r\n'
@@ -383,13 +383,13 @@ class WebApiRouteTests(unittest.TestCase):
         self.assertEqual(
             [tool["name"] for tool in json.loads(tools_body)["tools"]],
             [
-                "bosshunter_get_onboarding",
-                "bosshunter_get_state",
-                "bosshunter_preview_preferences",
-                "bosshunter_apply_preferences",
-                "bosshunter_start_workflow",
-                "bosshunter_get_pending_evaluations",
-                "bosshunter_submit_evaluations",
+                "jobhunter_pro_get_onboarding",
+                "jobhunter_pro_get_state",
+                "jobhunter_pro_preview_preferences",
+                "jobhunter_pro_apply_preferences",
+                "jobhunter_pro_start_workflow",
+                "jobhunter_pro_get_pending_evaluations",
+                "jobhunter_pro_submit_evaluations",
             ],
         )
         self.assertNotIn("private-agent-key", body)
@@ -447,7 +447,7 @@ class WebApiRouteTests(unittest.TestCase):
         self.assertFalse(payload["ready_for_collection"])
         self.assertFalse(payload["ready_for_agent_workflow"])
 
-    def test_agent_can_evaluate_collected_jobs_without_bosshunter_ai_key(self):
+    def test_agent_can_evaluate_collected_jobs_without_jobhunter_pro_ai_key(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
             resume_path = base_dir / "resume.md"
@@ -460,7 +460,7 @@ class WebApiRouteTests(unittest.TestCase):
                 encoding="utf-8",
             )
             server.set_base_dir(base_dir)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("agent-evaluation"))
             finally:
@@ -488,7 +488,7 @@ class WebApiRouteTests(unittest.TestCase):
 
             self.assertTrue(submit_status.startswith("200"), submit_body)
             self.assertEqual(json.loads(submit_body)["result"]["ready"], ["agent-evaluation"])
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 row = dict(db.execute("SELECT score, greeting, status FROM jobs WHERE id = ?", ("agent-evaluation",)).fetchone())
                 has_trace, trace = get_score_trace(db, "agent-evaluation")
@@ -585,7 +585,7 @@ class WebApiRouteTests(unittest.TestCase):
             base_dir = Path(tmp)
             server.set_base_dir(base_dir)
             (base_dir / "config.yaml").write_text(yaml.safe_dump({"profile": {"blocked_companies": ["Blocked"]}}))
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             insert_job(db, _job("allowed"))
             insert_job(db, {**_job("blocked"), "company": "Blocked"})
             status, _, body = self._request("/api/agent/evaluations", "POST", {
@@ -598,9 +598,9 @@ class WebApiRouteTests(unittest.TestCase):
             db.close()
 
     def test_agent_greeting_requires_approval_before_shared_sender_selection(self):
-        from bosshunter.agent_api import validate_agent_evaluations
-        from bosshunter.db import persist_agent_evaluations, get_jobs_ready_to_send, get_jobs_pending_confirmation
-        from bosshunter.ai.greeter import generate_greetings
+        from jobhunter_pro.agent_api import validate_agent_evaluations
+        from jobhunter_pro.db import persist_agent_evaluations, get_jobs_ready_to_send, get_jobs_pending_confirmation
+        from jobhunter_pro.ai.greeter import generate_greetings
         with tempfile.TemporaryDirectory() as tmp:
             db_path = Path(tmp) / "synthetic.db"
             db = get_db(db_path)
@@ -611,7 +611,7 @@ class WebApiRouteTests(unittest.TestCase):
             }], 71)
             persist_agent_evaluations(db, evaluations)
             self.assertEqual(get_jobs_ready_to_send(db), [])
-            from bosshunter.executor import sender
+            from jobhunter_pro.executor import sender
             send_config = {"throttle": {"day_off_probability": 0, "send_windows": []}}
             with patch.object(sender, "get_db", side_effect=lambda *args, **kwargs: get_db(db_path)), patch.object(sender, "should_take_day_off", return_value=False), patch.object(sender.SendWindowChecker, "is_active", return_value=True), patch.object(sender, "_send_greeting_once") as outbound:
                 self.assertEqual(sender.send_greetings(send_config), 0)
@@ -620,7 +620,7 @@ class WebApiRouteTests(unittest.TestCase):
             self.assertEqual([row["id"] for row in get_jobs_pending_confirmation(db)], ["agent-greeting"])
             update_job_status(db, "agent-greeting", "approved")
             add_history(db, "agent-greeting", "approved", "synthetic human confirmation")
-            with patch("bosshunter.ai.greeter.get_db", side_effect=lambda *args, **kwargs: get_db(db_path)):
+            with patch("jobhunter_pro.ai.greeter.get_db", side_effect=lambda *args, **kwargs: get_db(db_path)):
                 self.assertEqual(generate_greetings({}), 0)
             # Greeter returns approved jobs to ready; persistent approval must survive.
             self.assertEqual([row["id"] for row in get_jobs_ready_to_send(db)], ["agent-greeting"])
@@ -646,7 +646,7 @@ class WebApiRouteTests(unittest.TestCase):
             self.assertFalse(safe_config["follow_up"]["enabled"])
             task.stop_requested.set()
             return {}
-        with patch.object(server, "_stop_for_active_platform_lock", return_value=False), patch("bosshunter.executor.monitor.monitor_and_send_resumes", side_effect=monitor) as run, patch("bosshunter.executor.monitor.close_monitor_chat_target"), patch.object(server, "_execute_deliver") as deliver:
+        with patch.object(server, "_stop_for_active_platform_lock", return_value=False), patch("jobhunter_pro.executor.monitor.monitor_and_send_resumes", side_effect=monitor) as run, patch("jobhunter_pro.executor.monitor.close_monitor_chat_target"), patch.object(server, "_execute_deliver") as deliver:
             server._execute_monitor(task, config)
         run.assert_called_once()
         deliver.assert_not_called()
@@ -793,12 +793,12 @@ class WebApiRouteTests(unittest.TestCase):
                 "boss_tab": None,
                 "errors": [],
                 "runtime_url": "http://127.0.0.1:3456",
-                "health": {"runtime": "bosshunter"},
+                "health": {"runtime": "jobhunter_pro"},
                 "browser_product": "Chrome/138.0",
             }
             with (
                 patch.dict("os.environ", {}, clear=True),
-                patch("bosshunter.web.preflight.run_browser_diagnostics", return_value=browser_ready),
+                patch("jobhunter_pro.web.preflight.run_browser_diagnostics", return_value=browser_ready),
             ):
                 status, headers, body = self._request("/api/workbench/preflight?mode=full")
 
@@ -855,7 +855,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_job_search_filters_keyword_score_salary_and_status(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 matching = _job("matching")
                 matching.update({"title": "实施顾问", "salary": "5-8K", "jd": "负责 SQL 系统实施"})
@@ -902,7 +902,7 @@ class WebApiRouteTests(unittest.TestCase):
             base_dir = Path(tmp)
             config_path = base_dir / "config.yaml"
             config_path.write_text(yaml.safe_dump({"profile": {"blocked_companies": ["  BLOCKED  "]}}))
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 for job_id, company, score, status_value in (
                     ("blocked-high", "Blocked Technology", 99, "ready"),
@@ -937,7 +937,7 @@ class WebApiRouteTests(unittest.TestCase):
             self.assertEqual([job["id"] for job in payload["items"]], ["blocked-high", "visible-high", "blocked-middle", "visible-low"])
             self.assertEqual(payload["total"], 4)
             self.assertEqual(payload["all_total"], 5)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 self.assertEqual(
                     [tuple(row) for row in db.execute("SELECT id, score, status, deleted_at FROM jobs ORDER BY id")], before
@@ -949,7 +949,7 @@ class WebApiRouteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
             (base_dir / "config.yaml").write_text(yaml.safe_dump({"profile": {"blocked_companies": ["blocked"]}}))
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 for job_id, company, city, score in (
                     ("blocked-sh", "Blocked Technology", "上海·浦东", 99),
@@ -979,7 +979,7 @@ class WebApiRouteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
             (base_dir / "config.yaml").write_text(yaml.safe_dump({"profile": {"blocked_companies": ["100%", "_hold", " "]}}))
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 for job_id, company in (("percent", "100% Real"), ("underscore", "My_Holdings"), ("visible", "100x Real Holdings")):
                     insert_job(db, {**_job(job_id), "company": company})
@@ -996,7 +996,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_job_search_supports_repeated_multi_select_filters(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 fixtures = [
                     ("boss-ready", "boss", "experienced", "本科", "ready"),
@@ -1024,7 +1024,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_job_search_filters_by_city_and_reports_city_options(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 for job_id, city in (("sh", "Shanghai"), ("sh-pd", "Shanghai·Pudong"), ("bj", "Beijing"), ("blank", "")):
                     job = _job(job_id)
@@ -1044,7 +1044,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_job_search_decodes_chinese_query_values(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 bachelor = _job("bachelor")
                 bachelor.update({"education": "本科", "city": "北京"})
@@ -1067,7 +1067,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_job_search_salary_overlap_excludes_unparseable_and_paginates(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 fixtures = [
                     ("high", "12K", 90),
@@ -1097,7 +1097,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_job_search_supports_whitelisted_column_sorting(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 for job_id, score, education in (("low", 60, "本科"), ("high", 90, "博士")):
                     job = _job(job_id)
@@ -1124,7 +1124,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_job_search_decodes_chinese_keyword_as_utf8(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 job = _job("chinese-keyword")
                 job["company"] = "网易"
@@ -1142,7 +1142,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_job_search_orders_newest_jobs_before_higher_scored_older_jobs(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("older-high-score"))
                 update_job_score(db, "older-high-score", 95, "高分旧岗位")
@@ -1174,7 +1174,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_job_search_filters_jobs_by_collection_time(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 now = datetime.now(UTC).replace(tzinfo=None)
                 fixtures = (
@@ -1224,7 +1224,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_legacy_jobs_endpoint_still_returns_an_array(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("legacy"))
             finally:
@@ -1240,7 +1240,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Arrange
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("ready-job"))
                 update_job_score(db, "ready-job", 82, "good match")
@@ -1261,7 +1261,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_workbench_excludes_collection_only_platforms_from_automatic_delivery(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 external = _job("zhilian-ready")
                 external.update({"source_platform": "zhilian", "source_job_id": "zhilian-ready"})
@@ -1281,7 +1281,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_workbench_reports_daily_send_quota(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("sent-today"))
                 add_history(db, "sent-today", "sent", "已发送")
@@ -1303,7 +1303,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_workbench_shows_approved_job_when_greeting_was_interrupted(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("approved-without-greeting"))
                 update_job_score(db, "approved-without-greeting", 84, "good match")
@@ -1324,7 +1324,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_workbench_returns_today_and_cumulative_funnel_counts(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 # Funnel "today" uses the machine's local calendar day. Keep fixtures
                 # in the same clock so this remains stable around local midnight.
@@ -1372,7 +1372,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Act
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("ready-job"))
                 update_job_score(db, "ready-job", 82, "good match")
@@ -1472,7 +1472,7 @@ class WebApiRouteTests(unittest.TestCase):
         deadline = datetime.now() + timedelta(milliseconds=50)
 
         # Act
-        with patch("bosshunter.web.tasks._deadline_from_config", return_value=deadline):
+        with patch("jobhunter_pro.web.tasks._deadline_from_config", return_value=deadline):
             task = runner.start("monitor", {"throttle": {"send_windows": ["09:00-16:00"]}})
             runner.wait(timeout=1)
         result = runner.status()["last_task"]
@@ -1491,7 +1491,7 @@ class WebApiRouteTests(unittest.TestCase):
         deadline = datetime.now() - timedelta(minutes=1)
 
         # Act
-        with patch("bosshunter.web.tasks._deadline_from_config", return_value=deadline):
+        with patch("jobhunter_pro.web.tasks._deadline_from_config", return_value=deadline):
             task = runner.start("monitor", {"throttle": {"send_windows": ["09:00-16:00"]}})
 
         # Assert
@@ -1544,7 +1544,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("ready-job"))
                 update_job_status(db, "ready-job", "ready")
@@ -1608,9 +1608,9 @@ class WebApiRouteTests(unittest.TestCase):
         task.logs = logs
 
         with (
-            patch("bosshunter.ai.greeter.generate_greetings", return_value=1) as generate,
-            patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"),
-            patch("bosshunter.executor.sender.send_greetings", return_value=1) as send,
+            patch("jobhunter_pro.ai.greeter.generate_greetings", return_value=1) as generate,
+            patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"),
+            patch("jobhunter_pro.executor.sender.send_greetings", return_value=1) as send,
         ):
             server._execute_deliver_batch(task, config)
 
@@ -1623,7 +1623,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_manual_sent_records_external_send_without_using_boss_quota(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 external = _job("51job-manual")
                 external.update({"source_platform": "51job", "source_job_id": "51job-manual"})
@@ -1638,7 +1638,7 @@ class WebApiRouteTests(unittest.TestCase):
                 json_body={"job_ids": ["51job-manual"], "confirmed": True},
             )
             workbench_status, _, workbench_body = self._request("/api/workbench")
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 row = verify_db.execute(
                     "SELECT status FROM jobs WHERE id = ?",
@@ -1661,7 +1661,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_manual_status_updates_history_and_blocks_sent_jobs(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 ready = _job("manual-status-ready")
                 sent = _job("manual-status-sent")
@@ -1680,7 +1680,7 @@ class WebApiRouteTests(unittest.TestCase):
                 "/api/jobs/status", method="POST",
                 json_body={"job_ids": [sent["id"]], "status": "ready"},
             )
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 row = verify_db.execute("SELECT status FROM jobs WHERE id = ?", (ready["id"],)).fetchone()
                 history = verify_db.execute("SELECT action, detail FROM history WHERE job_id = ?", (ready["id"],)).fetchall()
@@ -1714,7 +1714,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_deliver_rejects_already_sent_jobs(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("already-sent"))
                 update_job_greeting(db, "already-sent", "已经发送过的招呼语")
@@ -1739,7 +1739,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_deliver_reports_pending_jobs_as_not_ready_instead_of_already_sent(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("pending-without-history"))
             finally:
@@ -1762,7 +1762,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_direct_send_requires_a_retryable_greeting(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("error-without-greeting"))
                 update_job_status(db, "error-without-greeting", "error")
@@ -1792,7 +1792,7 @@ class WebApiRouteTests(unittest.TestCase):
         runner._executors["deliver"] = capture_deliver
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("direct-finalized"))
                 update_job_greeting(db, "direct-finalized", "已经确认的招呼语")
@@ -1807,7 +1807,7 @@ class WebApiRouteTests(unittest.TestCase):
                      "_task_config",
                      side_effect=lambda overrides=None: dict(overrides or {}),
                  ), \
-                 patch("bosshunter.web.tasks._deadline_from_config", return_value=None):
+                 patch("jobhunter_pro.web.tasks._deadline_from_config", return_value=None):
                 status, _, body = self._request(
                     "/api/workbench/deliver",
                     method="POST",
@@ -1822,7 +1822,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_pending_greeting_preview_requires_selection_before_send(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("preview-pending"))
                 update_job_status(db, "preview-pending", "ready")
@@ -1889,7 +1889,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_greeting_selection_applies_choice_and_locks_the_result(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("preview-choice"))
                 update_job_status(db, "preview-choice", "ready")
@@ -1917,7 +1917,7 @@ class WebApiRouteTests(unittest.TestCase):
                 json_body={"selection": "optimized", "confirmed": True},
             )
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 row = verify_db.execute(
                     "SELECT greeting, greeting_selection, greeting_reviewed_at FROM jobs WHERE id = ?",
@@ -1958,7 +1958,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("ready-job"))
                 update_job_status(db, "ready-job", "ready")
@@ -1973,7 +1973,7 @@ class WebApiRouteTests(unittest.TestCase):
                     json_body={"job_ids": ["ready-job"]},
                 )
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 job_status = verify_db.execute(
                     "SELECT status FROM jobs WHERE id = ?",
@@ -2003,7 +2003,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("ready-job"))
                 update_job_status(db, "ready-job", "ready")
@@ -2042,7 +2042,7 @@ class WebApiRouteTests(unittest.TestCase):
                     for chunk in server.app(environ, start_response)
                 ).decode("utf-8")
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 status = verify_db.execute(
                     "SELECT status FROM jobs WHERE id = ?",
@@ -2074,7 +2074,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 for job_id in ("already-scheduled", "new-ready"):
                     insert_job(db, _job(job_id))
@@ -2133,7 +2133,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Act
         with patch.object(server, "_execute_deliver") as execute_deliver, \
              patch(
-                 "bosshunter.executor.monitor.monitor_and_send_resumes",
+                 "jobhunter_pro.executor.monitor.monitor_and_send_resumes",
                  side_effect=stop_after_monitor,
              ):
             server._execute_monitor(task, {"monitor": {"interval": 30}})
@@ -2164,7 +2164,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("ready-job"))
                 update_job_status(db, "ready-job", "ready")
@@ -2218,7 +2218,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("ready-job"))
                 update_job_status(db, "ready-job", "ready")
@@ -2233,7 +2233,7 @@ class WebApiRouteTests(unittest.TestCase):
                     json_body={"job_ids": ["ready-job"]},
                 )
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 job_status = verify_db.execute(
                     "SELECT status FROM jobs WHERE id = ?",
@@ -2280,7 +2280,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Act
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("ready-a"))
                 update_job_score(db, "ready-a", 88, "good match")
@@ -2320,7 +2320,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("approved-a"))
                 update_job_score(db, "approved-a", 88, "good match")
@@ -2364,7 +2364,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Act
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("deferred-ready"))
                 update_job_status(db, "deferred-ready", "ready")
@@ -2398,9 +2398,9 @@ class WebApiRouteTests(unittest.TestCase):
             return 1
 
         # Act: a partial result must not raise and abort the full workflow.
-        with patch("bosshunter.ai.greeter.generate_greetings", return_value=3), \
-        patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"), \
-             patch("bosshunter.executor.sender.send_greetings", side_effect=fake_send):
+        with patch("jobhunter_pro.ai.greeter.generate_greetings", return_value=3), \
+        patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"), \
+             patch("jobhunter_pro.executor.sender.send_greetings", side_effect=fake_send):
             server._execute_deliver(task, config)
 
         # Assert
@@ -2423,9 +2423,9 @@ class WebApiRouteTests(unittest.TestCase):
             send_config["_workbench_send_report"] = {"sent_count": 2}
             return 2
 
-        with patch("bosshunter.ai.greeter.generate_greetings", side_effect=fake_generate), \
-        patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"), \
-             patch("bosshunter.executor.sender.send_greetings", side_effect=fake_send):
+        with patch("jobhunter_pro.ai.greeter.generate_greetings", side_effect=fake_generate), \
+        patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"), \
+             patch("jobhunter_pro.executor.sender.send_greetings", side_effect=fake_send):
             server._execute_deliver(task, config)
 
         self.assertIn("招呼语准备完成：2/3（新生成 1）", task.logs)
@@ -2448,9 +2448,9 @@ class WebApiRouteTests(unittest.TestCase):
             return 0
 
         # Act / Assert
-        with patch("bosshunter.ai.greeter.generate_greetings", return_value=2), \
-        patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"), \
-             patch("bosshunter.executor.sender.send_greetings", side_effect=fake_send), \
+        with patch("jobhunter_pro.ai.greeter.generate_greetings", return_value=2), \
+        patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"), \
+             patch("jobhunter_pro.executor.sender.send_greetings", side_effect=fake_send), \
              self.assertRaisesRegex(RuntimeError, "验证码"):
             server._execute_deliver(task, config)
 
@@ -2458,7 +2458,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Arrange
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("reject-a"))
                 update_job_score(db, "reject-a", 82, "good match")
@@ -2501,7 +2501,7 @@ class WebApiRouteTests(unittest.TestCase):
                 for chunk in server.app(environ, start_response)
             ).decode("utf-8")
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 statuses = {
                     row["id"]: row["status"]
@@ -2533,7 +2533,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_workbench_reject_rejects_mixed_status_batch_without_mutation(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("reject-safe"))
                 update_job_status(db, "reject-safe", "ready")
@@ -2550,7 +2550,7 @@ class WebApiRouteTests(unittest.TestCase):
                 json_body={"job_ids": ["reject-safe", "reject-sent"]},
             )
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 rows = verify_db.execute(
                     "SELECT id, status FROM jobs WHERE id IN ('reject-safe', 'reject-sent') ORDER BY id"
@@ -2574,7 +2574,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_workbench_reject_allows_error_status(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("reject-error"))
                 update_job_status(db, "reject-error", "error")
@@ -2594,7 +2594,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_greeting_generation_rejects_scored_and_terminal_jobs(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 for job_id, status_name in (("greet-scored", "scored"), ("greet-sent", "sent")):
                     insert_job(db, _job(job_id))
@@ -2605,14 +2605,14 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
             server.set_base_dir(base_dir)
 
-            with patch("bosshunter.ai.greeter.generate_greetings") as generate:
+            with patch("jobhunter_pro.ai.greeter.generate_greetings") as generate:
                 status, _, body = self._request(
                     "/api/workbench/greetings",
                     method="POST",
                     json_body={"job_ids": ["greet-scored", "greet-sent"]},
                 )
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 rows = {
                     str(row["id"]): dict(row)
@@ -2658,7 +2658,7 @@ class WebApiRouteTests(unittest.TestCase):
         runner = WorkbenchTaskRunner({"greet": server._execute_greet})
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("greet-error"))
                 update_job_status(db, "greet-error", "error")
@@ -2666,8 +2666,8 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
             server.set_base_dir(base_dir)
 
-            with patch("bosshunter.ai.greeter.generate_greetings", side_effect=fake_generate), \
-            patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"), \
+            with patch("jobhunter_pro.ai.greeter.generate_greetings", side_effect=fake_generate), \
+            patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"), \
                  patch.object(server, "load_config", return_value={}), \
                  patch.object(server, "task_runner", runner):
                 status, _, body = self._request(
@@ -2705,7 +2705,7 @@ class WebApiRouteTests(unittest.TestCase):
             self.assertTrue(started.wait(timeout=1))
             with tempfile.TemporaryDirectory() as tmp:
                 base_dir = Path(tmp)
-                db = get_db(base_dir / "data" / "bosshunter.db")
+                db = get_db(base_dir / "data" / "jobhunter_pro.db")
                 try:
                     insert_job(db, _job("greet-busy"))
                     update_job_status(db, "greet-busy", "ready")
@@ -2735,7 +2735,7 @@ class WebApiRouteTests(unittest.TestCase):
         runner = WorkbenchTaskRunner({"greet": server._execute_greet})
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("greet-ai-fail"))
                 update_job_status(db, "greet-ai-fail", "ready")
@@ -2743,8 +2743,8 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
             server.set_base_dir(base_dir)
 
-            with patch("bosshunter.ai.greeter.generate_greetings", side_effect=failing_generate), \
-            patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"), \
+            with patch("jobhunter_pro.ai.greeter.generate_greetings", side_effect=failing_generate), \
+            patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"), \
                  patch.object(server, "load_config", return_value={}), \
                  patch.object(server, "task_runner", runner):
                 status, _, body = self._request(
@@ -2755,7 +2755,7 @@ class WebApiRouteTests(unittest.TestCase):
             runner.wait(timeout=2)
             result = runner.status()["last_task"]
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 row = verify_db.execute(
                     "SELECT greeting, status FROM jobs WHERE id = 'greet-ai-fail'"
@@ -2787,7 +2787,7 @@ class WebApiRouteTests(unittest.TestCase):
         runner = WorkbenchTaskRunner({"greet": server._execute_greet})
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("greet-quota-paused"))
                 update_job_status(db, "greet-quota-paused", "ready")
@@ -2795,8 +2795,8 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
             server.set_base_dir(base_dir)
 
-            with patch("bosshunter.ai.greeter.generate_greetings", side_effect=paused_generate), \
-            patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"), \
+            with patch("jobhunter_pro.ai.greeter.generate_greetings", side_effect=paused_generate), \
+            patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"), \
                  patch.object(server, "load_config", return_value={}), \
                  patch.object(server, "task_runner", runner):
                 status, _, body = self._request(
@@ -2833,7 +2833,7 @@ class WebApiRouteTests(unittest.TestCase):
         runner = WorkbenchTaskRunner({"greet": server._execute_greet})
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 for job_id in ("greet-done", "greet-remaining"):
                     insert_job(db, _job(job_id))
@@ -2842,8 +2842,8 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
             server.set_base_dir(base_dir)
 
-            with patch("bosshunter.ai.greeter.generate_greetings", side_effect=partial_paused_generate), \
-            patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"), \
+            with patch("jobhunter_pro.ai.greeter.generate_greetings", side_effect=partial_paused_generate), \
+            patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"), \
                  patch.object(server, "load_config", return_value={}), \
                  patch.object(server, "task_runner", runner):
                 status, _, body = self._request(
@@ -2869,7 +2869,7 @@ class WebApiRouteTests(unittest.TestCase):
         runner = WorkbenchTaskRunner({"greet": server._execute_greet})
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("greet-no-resume"))
                 update_job_status(db, "greet-no-resume", "ready")
@@ -2877,8 +2877,8 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
             server.set_base_dir(base_dir)
 
-            with patch("bosshunter.ai.greeter._get_resume_summary", return_value=""), \
-                 patch("bosshunter.ai.greeter.generate_greetings") as generate, \
+            with patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value=""), \
+                 patch("jobhunter_pro.ai.greeter.generate_greetings") as generate, \
                  patch.object(server, "load_config", return_value={}), \
                  patch.object(server, "task_runner", runner):
                 status, _, body = self._request(
@@ -2898,7 +2898,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_save_generated_greeting_rejects_allowed_status_transition(self):
         # 审计 P2 回归：approved→error 等允许状态间的并发变化必须拒绝，不能写回 ready。
         with tempfile.TemporaryDirectory() as tmp:
-            db = get_db(Path(tmp) / "data" / "bosshunter.db")
+            db = get_db(Path(tmp) / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("cas-transition"))
                 update_job_status(db, "cas-transition", "approved")
@@ -2929,7 +2929,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_mark_existing_greeting_ready_rejects_allowed_status_transition(self):
         # Codex 审计 P2 回归：保留现有招呼语同样必须钉扎状态，approved→error 后不得复活为 ready。
         with tempfile.TemporaryDirectory() as tmp:
-            db = get_db(Path(tmp) / "data" / "bosshunter.db")
+            db = get_db(Path(tmp) / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("preserve-transition"))
                 update_job_greeting(db, "preserve-transition", "人工编辑的招呼语")
@@ -2974,7 +2974,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("edit-busy"))
                 update_job_greeting(db, "edit-busy", "原招呼语")
@@ -2990,7 +2990,7 @@ class WebApiRouteTests(unittest.TestCase):
                     json_body={"confirmed": True, "greeting": "投递期间的新文本"},
                 )
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 row = verify_db.execute(
                     "SELECT greeting FROM jobs WHERE id = 'edit-busy'"
@@ -3011,7 +3011,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("edit-monitor-busy"))
                 update_job_greeting(db, "edit-monitor-busy", "原招呼语")
@@ -3035,7 +3035,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Codex 审计 P1 回归：只生成过草稿（ready）未经确认，全流程启动不得自动发送积压。
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("draft-only"))
                 update_job_greeting(db, "draft-only", "未确认的草稿招呼语")
@@ -3061,7 +3061,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("backlog-a"))
                 update_job_greeting(db, "backlog-a", "未确认的积压草稿")
@@ -3117,7 +3117,7 @@ class WebApiRouteTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("greet-db-path"))
                 update_job_status(db, "greet-db-path", "ready")
@@ -3125,8 +3125,8 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
             server.set_base_dir(base_dir)
 
-            with patch("bosshunter.ai.greeter.generate_greetings", side_effect=fake_generate), \
-                 patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"), \
+            with patch("jobhunter_pro.ai.greeter.generate_greetings", side_effect=fake_generate), \
+                 patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"), \
                  patch.object(server, "load_config", return_value={}), \
                  patch.object(server, "task_runner", runner):
                 status, _, body = self._request(
@@ -3137,8 +3137,8 @@ class WebApiRouteTests(unittest.TestCase):
             runner.wait(timeout=2)
 
         self.assertTrue(status.startswith("200"), body)
-        self.assertEqual(captured["db_path"], server.DATA_DIR / "bosshunter.db")
-        self.assertTrue(str(captured["db_path"]).endswith("bosshunter.db"))
+        self.assertEqual(captured["db_path"], server.DATA_DIR / "jobhunter_pro.db")
+        self.assertTrue(str(captured["db_path"]).endswith("jobhunter_pro.db"))
 
     def test_web_api_greeting_generation_reports_conflict_ids_on_cas_failure(self):
         def fake_generate(config, job_ids=None, db_path=None):
@@ -3154,7 +3154,7 @@ class WebApiRouteTests(unittest.TestCase):
         runner = WorkbenchTaskRunner({"greet": server._execute_greet})
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("greet-cas"))
                 update_job_status(db, "greet-cas", "ready")
@@ -3162,8 +3162,8 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
             server.set_base_dir(base_dir)
 
-            with patch("bosshunter.ai.greeter.generate_greetings", side_effect=fake_generate), \
-            patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"), \
+            with patch("jobhunter_pro.ai.greeter.generate_greetings", side_effect=fake_generate), \
+            patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"), \
                  patch.object(server, "load_config", return_value={}), \
                  patch.object(server, "task_runner", runner):
                 status, _, body = self._request(
@@ -3197,7 +3197,7 @@ class WebApiRouteTests(unittest.TestCase):
         runner = WorkbenchTaskRunner({"greet": server._execute_greet})
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("greet-ok"))
                 update_job_status(db, "greet-ok", "ready")
@@ -3207,8 +3207,8 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
             server.set_base_dir(base_dir)
 
-            with patch("bosshunter.ai.greeter.generate_greetings", side_effect=fake_generate), \
-            patch("bosshunter.ai.greeter._get_resume_summary", return_value="简历摘要"), \
+            with patch("jobhunter_pro.ai.greeter.generate_greetings", side_effect=fake_generate), \
+            patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="简历摘要"), \
                  patch.object(server, "load_config", return_value={}), \
                  patch.object(server, "task_runner", runner):
                 status, _, body = self._request(
@@ -3229,7 +3229,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_greeting_edit_blocks_sent_without_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("edit-sent"))
                 update_job_greeting(db, "edit-sent", "原招呼语")
@@ -3244,7 +3244,7 @@ class WebApiRouteTests(unittest.TestCase):
                 json_body={"confirmed": True, "greeting": "不应保存的新招呼语"},
             )
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 row = verify_db.execute(
                     "SELECT greeting, status FROM jobs WHERE id = 'edit-sent'"
@@ -3263,7 +3263,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_greeting_edit_allows_error_and_keeps_status(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("edit-error"))
                 update_job_status(db, "edit-error", "error")
@@ -3277,7 +3277,7 @@ class WebApiRouteTests(unittest.TestCase):
                 json_body={"confirmed": True, "greeting": "人工修正后的招呼语"},
             )
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 row = verify_db.execute(
                     "SELECT greeting, status FROM jobs WHERE id = 'edit-error'"
@@ -3297,7 +3297,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_greeting_edit_rejects_over_300_characters(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("edit-too-long"))
                 update_job_status(db, "edit-too-long", "ready")
@@ -3316,7 +3316,7 @@ class WebApiRouteTests(unittest.TestCase):
 
     def test_db_greeting_mutations_refuse_terminal_or_stale_statuses(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db = get_db(Path(tmp) / "bosshunter.db")
+            db = get_db(Path(tmp) / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("db-ready"))
                 update_job_status(db, "db-ready", "ready")
@@ -3378,7 +3378,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Arrange
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("reject-visible"))
                 update_job_score(db, "reject-visible", 82, "good match")
@@ -3597,7 +3597,7 @@ class WebApiRouteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
             (base_dir / "config.yaml").write_text("{}\n", encoding="utf-8")
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("open-chat"))
                 add_history(db, "open-chat", "replied", "已回复")
@@ -3611,7 +3611,7 @@ class WebApiRouteTests(unittest.TestCase):
 
             with patch.object(server.task_runner, "status", return_value={"active": None}), \
                  patch(
-                     "bosshunter.executor.monitor._open_conversation_from_chat_list",
+                     "jobhunter_pro.executor.monitor._open_conversation_from_chat_list",
                      return_value="chat-target",
                  ) as open_conversation:
                 status, _, body = self._request(
@@ -3630,7 +3630,7 @@ class WebApiRouteTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
             (base_dir / "config.yaml").write_text("{}\n", encoding="utf-8")
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("prepare-reply"))
                 add_history(db, "prepare-reply", "hr_reply_detected", "检测到新消息")
@@ -3644,7 +3644,7 @@ class WebApiRouteTests(unittest.TestCase):
 
             with patch.object(server.task_runner, "status", return_value={"active": None}), \
                  patch(
-                     "bosshunter.executor.monitor.process_detected_reply",
+                     "jobhunter_pro.executor.monitor.process_detected_reply",
                      return_value={"pending": 1, "failed": 0},
                  ) as process_reply:
                 status, _, body = self._request(
@@ -3669,7 +3669,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Arrange
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("reply-dismiss"))
                 update_job_status(db, "reply-dismiss", "sent")
@@ -3712,7 +3712,7 @@ class WebApiRouteTests(unittest.TestCase):
                 for chunk in server.app(environ, start_response)
             ).decode("utf-8")
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 job_status = verify_db.execute(
                     "SELECT status FROM jobs WHERE id = ?", ("reply-dismiss",)
@@ -3739,7 +3739,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Arrange
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("reply-confirm"))
                 update_job_status(db, "reply-confirm", "sent")
@@ -3782,7 +3782,7 @@ class WebApiRouteTests(unittest.TestCase):
                 for chunk in server.app(environ, start_response)
             ).decode("utf-8")
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 history_actions = [
                     dict(row)
@@ -3808,7 +3808,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_history_reply_confirmation_is_idempotent(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("reply-once"))
                 add_history(db, "reply-once", "reply_pending", "AI建议回复")
@@ -3831,7 +3831,7 @@ class WebApiRouteTests(unittest.TestCase):
                 json_body={"message": "已手动回复 HR"},
             )
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 reply_count = verify_db.execute(
                     "SELECT COUNT(*) FROM history WHERE job_id = ? AND action = 'replied'",
@@ -3848,7 +3848,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_history_dismiss_is_idempotent(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("dismiss-once"))
                 add_history(db, "dismiss-once", "reply_pending", "AI建议回复")
@@ -3871,7 +3871,7 @@ class WebApiRouteTests(unittest.TestCase):
                 json_body={},
             )
 
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 dismiss_count = verify_db.execute(
                     "SELECT COUNT(*) FROM history WHERE job_id = ? AND action = 'reply_dismissed'",
@@ -3888,7 +3888,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_history_dismiss_rejects_stale_reply_round(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("dismiss-stale"))
                 add_history(db, "dismiss-stale", "reply_pending", "第一轮建议")
@@ -3914,7 +3914,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Arrange
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("reply-open"))
                 insert_job(db, _job("reply-closed"))
@@ -3941,7 +3941,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Arrange
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("resume-failed-open"))
                 insert_job(db, _job("resume-failed-resolved"))
@@ -3974,7 +3974,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_history_includes_last_week_replies_outside_recent_limit(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 for job_id in ("recent-reply", "recent-resume-sent", "expired-reply", "recent-noise"):
                     insert_job(db, _job(job_id))
@@ -4032,7 +4032,7 @@ class WebApiRouteTests(unittest.TestCase):
         # Arrange
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("resume-failed-detail"))
                 add_history(
@@ -4058,7 +4058,7 @@ class WebApiRouteTests(unittest.TestCase):
             status, _, body = self._request("/api/history?limit=10&include_unresolved=1")
             unresolved_item = json.loads(body)[0]
 
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 db.execute(
                     "UPDATE jobs SET resume_path = ? WHERE id = ?",
@@ -4095,7 +4095,7 @@ class WebApiRouteTests(unittest.TestCase):
              patch.object(server, "collect_preflight_checks", return_value=[]) as preflight, \
              patch.object(server, "_preflight_messages", return_value=[]), \
              patch.object(server.task_runner, "start", return_value={"id": "resumed"}) as start:
-            db_path = Path(tmp) / "bosshunter.db"
+            db_path = Path(tmp) / "jobhunter_pro.db"
             create_collection_run(db_path, run_id="original", options=saved_options,
                                   platform_states={"boss": {"status": "stopped"}}, enable_boss_resume=True)
             update_collection_run(db_path, "original", status="stopped")
@@ -4209,14 +4209,14 @@ class WebApiRouteTests(unittest.TestCase):
             encoding="utf-8",
         )
         server.set_base_dir(base_dir)
-        db = get_db(server.DATA_DIR / "bosshunter.db")
+        db = get_db(server.DATA_DIR / "jobhunter_pro.db")
         try:
             insert_job(db, _job("p1"))
         finally:
             db.close()
 
     def _seed_run(self, run_id: str, status: str):
-        db_path = server.DATA_DIR / "bosshunter.db"
+        db_path = server.DATA_DIR / "jobhunter_pro.db"
         create_scoring_run(
             db_path,
             run_id=run_id,
@@ -4263,7 +4263,7 @@ class WebApiRouteTests(unittest.TestCase):
                 self.assertTrue(status.startswith("409"), body)
                 self.assertEqual(payload.get("code"), "scoring_run_paused")
 
-            old_run = get_scoring_run(server.DATA_DIR / "bosshunter.db", "run-paused")
+            old_run = get_scoring_run(server.DATA_DIR / "jobhunter_pro.db", "run-paused")
             self.assertEqual(old_run["status"], "paused")
             runner.start.assert_not_called()
 
@@ -4285,7 +4285,7 @@ class WebApiRouteTests(unittest.TestCase):
                 )
 
             payload = json.loads(body)
-            old_run = get_scoring_run(server.DATA_DIR / "bosshunter.db", "run-paused")
+            old_run = get_scoring_run(server.DATA_DIR / "jobhunter_pro.db", "run-paused")
             self.assertTrue(status.startswith("200"), body)
             self.assertEqual(old_run["status"], "stopped")
             self.assertIn("强制结束", old_run["error"])
@@ -4330,7 +4330,7 @@ class WebApiRouteTests(unittest.TestCase):
                 for state in states:
                     callback(dict(state))
 
-            with patch("bosshunter.ai.scorer.score_jobs", side_effect=fake_score_jobs), patch.object(
+            with patch("jobhunter_pro.ai.scorer.score_jobs", side_effect=fake_score_jobs), patch.object(
                 server, "update_scoring_run", return_value=None
             ) as update_run:
                 server._execute_score(task, {"_score_run_id": "run-checkpoint", "_score_options": {}})
@@ -4344,7 +4344,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_resume_retry_success_marks_needs_resume(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("resume-retry-ok"))
                 add_history(db, "resume-retry-ok", "resume_failed", json.dumps({"schema": "resume_failed.v2", "system_reason": "fail"}))
@@ -4358,12 +4358,12 @@ class WebApiRouteTests(unittest.TestCase):
             fake_resume = base_dir / "data" / "resumes" / "retry.pdf"
             fake_resume.parent.mkdir(parents=True, exist_ok=True)
             fake_resume.write_text("pdf", encoding="utf-8")
-            with patch("bosshunter.ai.resume.generate_tailored_resume", return_value=fake_resume):
+            with patch("jobhunter_pro.ai.resume.generate_tailored_resume", return_value=fake_resume):
                 status, _, body = self._request(f"/api/history/{history_id}/resume-retry", method="POST", json_body={})
             self.assertTrue(status.startswith("200"), body)
             payload = json.loads(body)
             self.assertTrue(payload["success"])
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 job_status = verify_db.execute("SELECT status FROM jobs WHERE id = ?", ("resume-retry-ok",)).fetchone()["status"]
                 actions = [row["action"] for row in verify_db.execute("SELECT action FROM history WHERE job_id = ?", ("resume-retry-ok",)).fetchall()]
@@ -4375,7 +4375,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_resume_retry_does_not_overwrite_replied_status(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("resume-retry-replied"))
                 update_job_status(db, "resume-retry-replied", "replied")
@@ -4390,10 +4390,10 @@ class WebApiRouteTests(unittest.TestCase):
             fake_resume = base_dir / "data" / "resumes" / "retry.pdf"
             fake_resume.parent.mkdir(parents=True, exist_ok=True)
             fake_resume.write_text("pdf", encoding="utf-8")
-            with patch("bosshunter.ai.resume.generate_tailored_resume", return_value=fake_resume):
+            with patch("jobhunter_pro.ai.resume.generate_tailored_resume", return_value=fake_resume):
                 status, _, body = self._request(f"/api/history/{history_id}/resume-retry", method="POST", json_body={})
             self.assertTrue(status.startswith("200"), body)
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 job_status = verify_db.execute("SELECT status FROM jobs WHERE id = ?", ("resume-retry-replied",)).fetchone()["status"]
             finally:
@@ -4403,7 +4403,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_resume_retry_failure_writes_resume_failed_history(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("resume-retry-fail"))
                 add_history(db, "resume-retry-fail", "resume_failed", json.dumps({"schema": "resume_failed.v2", "system_reason": "old"}))
@@ -4414,13 +4414,13 @@ class WebApiRouteTests(unittest.TestCase):
             finally:
                 db.close()
             server.set_base_dir(base_dir)
-            with patch("bosshunter.ai.resume.generate_tailored_resume", return_value=None), patch(
-                "bosshunter.ai.resume.get_last_resume_failure_reason", return_value="test failure"
+            with patch("jobhunter_pro.ai.resume.generate_tailored_resume", return_value=None), patch(
+                "jobhunter_pro.ai.resume.get_last_resume_failure_reason", return_value="test failure"
             ):
                 status, _, body = self._request(f"/api/history/{history_id}/resume-retry", method="POST", json_body={})
             self.assertTrue(status.startswith("400"), body)
             self.assertIn("test failure", body)
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 failed_count = verify_db.execute(
                     "SELECT COUNT(*) AS cnt FROM history WHERE job_id = ? AND action = ?",
@@ -4433,7 +4433,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_web_api_resume_dismiss_removes_failure_from_pending(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db = get_db(base_dir / "data" / "bosshunter.db")
+            db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("resume-dismiss-test"))
                 add_history(db, "resume-dismiss-test", "resume_failed", json.dumps({"schema": "resume_failed.v2", "system_reason": "fail"}))
@@ -4446,7 +4446,7 @@ class WebApiRouteTests(unittest.TestCase):
             server.set_base_dir(base_dir)
             status, _, body = self._request(f"/api/history/{history_id}/resume-dismiss", method="POST", json_body={})
             self.assertTrue(status.startswith("200"), body)
-            verify_db = get_db(base_dir / "data" / "bosshunter.db")
+            verify_db = get_db(base_dir / "data" / "jobhunter_pro.db")
             try:
                 actions = [row["action"] for row in verify_db.execute("SELECT action FROM history WHERE job_id = ? ORDER BY id", ("resume-dismiss-test",)).fetchall()]
                 unresolved = get_unresolved_resume_failures(verify_db)
@@ -4464,7 +4464,7 @@ class WebApiRouteTests(unittest.TestCase):
             source_path.parent.mkdir(parents=True, exist_ok=True)
             source_path.write_text("# 候选人\n\n## 教育经历\n本科\n", encoding="utf-8")
             image_path.write_bytes(b"png")
-            db = get_db(root / "data" / "bosshunter.db")
+            db = get_db(root / "data" / "jobhunter_pro.db")
             try:
                 insert_job(db, _job("job-review"))
                 db.execute(
@@ -4496,7 +4496,7 @@ class WebApiRouteTests(unittest.TestCase):
             self.assertTrue(status.startswith("200"), body)
             self.assertEqual(json.loads(body)["status"], "ready")
 
-            db = get_db(root / "data" / "bosshunter.db")
+            db = get_db(root / "data" / "jobhunter_pro.db")
             try:
                 row = db.execute(
                     "SELECT resume_review_status, resume_reviewed_at FROM jobs WHERE id = ?",
@@ -4508,11 +4508,11 @@ class WebApiRouteTests(unittest.TestCase):
             self.assertIsNotNone(row["resume_reviewed_at"])
 
     def test_greeting_selection_during_send_cannot_change_sent_text(self):
-        from bosshunter.executor.sender import send_greetings
+        from jobhunter_pro.executor.sender import send_greetings
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db_path = base_dir / "data" / "bosshunter.db"
+            db_path = base_dir / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             insert_job(db, _job("send-snapshot"))
             update_job_status(db, "send-snapshot", "ready")
@@ -4536,13 +4536,13 @@ class WebApiRouteTests(unittest.TestCase):
                 return {"success": True}, None
 
             with (
-                patch("bosshunter.db.DB_PATH", db_path),
+                patch("jobhunter_pro.db.DB_PATH", db_path),
                 patch.object(server.task_runner, "status", return_value={
                     "active": {"id": "sending", "mode": "deliver", "status": "running"},
                 }),
-                patch("bosshunter.executor.sender.should_take_day_off", return_value=False),
-                patch("bosshunter.executor.sender.SendWindowChecker.is_active", return_value=True),
-                patch("bosshunter.executor.sender._send_greeting_once", side_effect=fake_send),
+                patch("jobhunter_pro.executor.sender.should_take_day_off", return_value=False),
+                patch("jobhunter_pro.executor.sender.SendWindowChecker.is_active", return_value=True),
+                patch("jobhunter_pro.executor.sender._send_greeting_once", side_effect=fake_send),
             ):
                 send_greetings({"_workbench_log": edit_during_send, "_workbench_greeting_activity": server.greeting_activity.claim, "throttle": {"daily_limit": 10}})
             db = get_db(db_path)
@@ -4557,11 +4557,11 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
 
     def test_send_allows_other_job_edits_and_reads_latest_text_after_throttle(self):
-        from bosshunter.executor.sender import send_greetings
+        from jobhunter_pro.executor.sender import send_greetings
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db_path = base_dir / "data" / "bosshunter.db"
+            db_path = base_dir / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             for index, job_id in enumerate(["first", "next", "review-only"]):
                 insert_job(db, _job(job_id))
@@ -4597,10 +4597,10 @@ class WebApiRouteTests(unittest.TestCase):
                 return False
 
             with (
-                patch("bosshunter.executor.sender.should_take_day_off", return_value=False),
-                patch("bosshunter.executor.sender.SendWindowChecker.is_active", return_value=True),
-                patch("bosshunter.executor.sender.RequestThrottle.wait", side_effect=during_wait),
-                patch("bosshunter.executor.sender._send_greeting_once", side_effect=fake_send),
+                patch("jobhunter_pro.executor.sender.should_take_day_off", return_value=False),
+                patch("jobhunter_pro.executor.sender.SendWindowChecker.is_active", return_value=True),
+                patch("jobhunter_pro.executor.sender.RequestThrottle.wait", side_effect=during_wait),
+                patch("jobhunter_pro.executor.sender._send_greeting_once", side_effect=fake_send),
             ):
                 count = send_greetings({
                     "_workbench_greeting_activity": server.greeting_activity.claim,
@@ -4619,11 +4619,11 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
 
     def test_generation_locks_only_current_job_and_preserves_new_manual_choice(self):
-        from bosshunter.ai.greeter import generate_greetings
+        from jobhunter_pro.ai.greeter import generate_greetings
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db_path = base_dir / "data" / "bosshunter.db"
+            db_path = base_dir / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             for index, job_id in enumerate(["generating-first", "generating-next"]):
                 insert_job(db, _job(job_id))
@@ -4651,8 +4651,8 @@ class WebApiRouteTests(unittest.TestCase):
                 "ai": {"greeting_max_iterations": 0},
             }
             with (
-                patch("bosshunter.ai.greeter._get_resume_summary", return_value="测试简历"),
-                patch("bosshunter.ai.greeter._generate_with_token_retry", side_effect=fake_generate) as generate,
+                patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="测试简历"),
+                patch("jobhunter_pro.ai.greeter._generate_with_token_retry", side_effect=fake_generate) as generate,
             ):
                 count = generate_greetings(config, job_ids=["generating-first", "generating-next"], db_path=db_path)
             self.assertEqual(count, 1)
@@ -4669,12 +4669,12 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
 
     def test_review_choice_between_generation_and_send_does_not_auto_send(self):
-        from bosshunter.ai.greeter import generate_greetings
-        from bosshunter.executor.sender import send_greetings
+        from jobhunter_pro.ai.greeter import generate_greetings
+        from jobhunter_pro.executor.sender import send_greetings
 
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db_path = base_dir / "data" / "bosshunter.db"
+            db_path = base_dir / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             insert_job(db, _job("choose-only"))
             update_job_status(db, "choose-only", "approved")
@@ -4688,9 +4688,9 @@ class WebApiRouteTests(unittest.TestCase):
                 "throttle": {"daily_limit": 10},
             }
             with (
-                patch("bosshunter.ai.greeter._get_resume_summary", return_value="测试简历"),
-                patch("bosshunter.ai.greeter._generate_with_token_retry", side_effect=["原稿", "优化稿"]),
-                patch("bosshunter.ai.greeter._review_greeting", return_value={"avg": 1, "critique": "调整措辞"}),
+                patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="测试简历"),
+                patch("jobhunter_pro.ai.greeter._generate_with_token_retry", side_effect=["原稿", "优化稿"]),
+                patch("jobhunter_pro.ai.greeter._review_greeting", return_value={"avg": 1, "critique": "调整措辞"}),
             ):
                 self.assertEqual(generate_greetings(config, job_ids=["choose-only"], db_path=db_path), 0)
             status, _, body = self._request(
@@ -4699,9 +4699,9 @@ class WebApiRouteTests(unittest.TestCase):
             )
             self.assertTrue(status.startswith("200"), body)
             with (
-                patch("bosshunter.executor.sender.should_take_day_off", return_value=False),
-                patch("bosshunter.executor.sender.SendWindowChecker.is_active", return_value=True),
-                patch("bosshunter.executor.sender._send_greeting_once", return_value=({"success": True}, None)) as send,
+                patch("jobhunter_pro.executor.sender.should_take_day_off", return_value=False),
+                patch("jobhunter_pro.executor.sender.SendWindowChecker.is_active", return_value=True),
+                patch("jobhunter_pro.executor.sender._send_greeting_once", return_value=({"success": True}, None)) as send,
             ):
                 self.assertEqual(send_greetings(config, db_path=db_path), 0)
                 send.assert_not_called()
@@ -4713,7 +4713,7 @@ class WebApiRouteTests(unittest.TestCase):
     def test_detail_edit_confirms_preview_and_cannot_be_regenerated(self):
         with tempfile.TemporaryDirectory() as tmp:
             base_dir = Path(tmp)
-            db_path = base_dir / "data" / "bosshunter.db"
+            db_path = base_dir / "data" / "jobhunter_pro.db"
             db = get_db(db_path)
             insert_job(db, _job("edited-preview"))
             update_job_status(db, "edited-preview", "approved")
@@ -4760,11 +4760,11 @@ class WebApiRouteTests(unittest.TestCase):
                 db.close()
 
     def test_preview_generation_does_not_revive_or_overwrite_changed_job(self):
-        from bosshunter.ai.greeter import generate_greetings
+        from jobhunter_pro.ai.greeter import generate_greetings
 
         for change in ("edited", "error", "sent", "deleted"):
             with self.subTest(change=change), tempfile.TemporaryDirectory() as tmp:
-                db_path = Path(tmp) / "data" / "bosshunter.db"
+                db_path = Path(tmp) / "data" / "jobhunter_pro.db"
                 db = get_db(db_path)
                 insert_job(db, _job("changed-during-ai"))
                 update_job_status(db, "changed-during-ai", "approved")
@@ -4786,8 +4786,8 @@ class WebApiRouteTests(unittest.TestCase):
 
                 config = {"ai": {"greeting_max_iterations": 0}}
                 with (
-                    patch("bosshunter.ai.greeter._get_resume_summary", return_value="真实简历摘要"),
-                    patch("bosshunter.ai.greeter._call_claude", side_effect=fake_ai),
+                    patch("jobhunter_pro.ai.greeter._get_resume_summary", return_value="真实简历摘要"),
+                    patch("jobhunter_pro.ai.greeter._call_claude", side_effect=fake_ai),
                 ):
                     self.assertEqual(generate_greetings(config, job_ids=["changed-during-ai"], db_path=db_path), 0)
                 self.assertEqual(config["_workbench_greeting_report"]["conflict_ids"], ["changed-during-ai"])

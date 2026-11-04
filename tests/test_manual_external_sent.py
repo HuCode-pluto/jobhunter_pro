@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from bosshunter.db import (
+from jobhunter_pro.db import (
     JobDeletionConfirmationError,
     JobManualSentConflictError,
     get_db,
@@ -107,7 +107,7 @@ def test_manual_sent_requires_explicit_confirmation():
 
 
 def test_manual_sent_falls_back_to_platform_code_when_label_missing(monkeypatch):
-    import bosshunter.db as db_module
+    import jobhunter_pro.db as db_module
 
     monkeypatch.setattr(
         db_module,

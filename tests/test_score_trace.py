@@ -6,9 +6,9 @@ from unittest.mock import patch
 
 import pytest
 
-from bosshunter.ai import scorer
-from bosshunter.ai.scorer import ScoreOutcome
-from bosshunter.db import (
+from jobhunter_pro.ai import scorer
+from jobhunter_pro.ai.scorer import ScoreOutcome
+from jobhunter_pro.db import (
     get_db,
     get_score_trace,
     insert_job,
@@ -16,7 +16,7 @@ from bosshunter.db import (
     update_job_score,
     update_job_status,
 )
-from bosshunter.web import server
+from jobhunter_pro.web import server
 
 
 def _job(job_id: str) -> dict:
@@ -262,10 +262,10 @@ def test_successful_score_persists_trace_while_prefilter_and_failure_do_not(tmp_
         return (0, "硬性条件不符") if job["id"] == "prefilter" else (80, "通过")
 
     with (
-        patch("bosshunter.ai.scorer.get_db", side_effect=lambda: get_db(db_path)),
-        patch("bosshunter.ai.scorer._load_resume", return_value="resume"),
-        patch("bosshunter.ai.scorer.quick_score", side_effect=quick_score),
-        patch("bosshunter.ai.scorer._score_job_with_ai", side_effect=outcomes),
+        patch("jobhunter_pro.ai.scorer.get_db", side_effect=lambda: get_db(db_path)),
+        patch("jobhunter_pro.ai.scorer._load_resume", return_value="resume"),
+        patch("jobhunter_pro.ai.scorer.quick_score", side_effect=quick_score),
+        patch("jobhunter_pro.ai.scorer._score_job_with_ai", side_effect=outcomes),
     ):
         scored, filtered = scorer.score_jobs({"ai": {"scoring_concurrency": 1}, "scoring": {"threshold": 55}})
 
@@ -291,9 +291,9 @@ def test_prefilter_and_failed_rescore_preserve_existing_valid_trace(tmp_path):
         db.close()
 
     with (
-        patch("bosshunter.ai.scorer.get_db", side_effect=lambda: get_db(db_path)),
-        patch("bosshunter.ai.scorer._load_resume", return_value="resume"),
-        patch("bosshunter.ai.scorer.quick_score", return_value=(0, "硬性条件不符")),
+        patch("jobhunter_pro.ai.scorer.get_db", side_effect=lambda: get_db(db_path)),
+        patch("jobhunter_pro.ai.scorer._load_resume", return_value="resume"),
+        patch("jobhunter_pro.ai.scorer.quick_score", return_value=(0, "硬性条件不符")),
     ):
         scorer.score_jobs({"ai": {"scoring_concurrency": 1}, "scoring": {"threshold": 55}})
 
@@ -303,11 +303,11 @@ def test_prefilter_and_failed_rescore_preserve_existing_valid_trace(tmp_path):
     finally:
         db.close()
     with (
-        patch("bosshunter.ai.scorer.get_db", side_effect=lambda: get_db(db_path)),
-        patch("bosshunter.ai.scorer._load_resume", return_value="resume"),
-        patch("bosshunter.ai.scorer.quick_score", return_value=(80, "通过")),
+        patch("jobhunter_pro.ai.scorer.get_db", side_effect=lambda: get_db(db_path)),
+        patch("jobhunter_pro.ai.scorer._load_resume", return_value="resume"),
+        patch("jobhunter_pro.ai.scorer.quick_score", return_value=(80, "通过")),
         patch(
-            "bosshunter.ai.scorer._score_job_with_ai",
+            "jobhunter_pro.ai.scorer._score_job_with_ai",
             return_value=ScoreOutcome(failure_detail="invalid JSON"),
         ),
     ):
@@ -328,7 +328,7 @@ def test_score_trace_api_exposes_safe_states_and_never_changes_job_list_payload(
     original_base_dir = server.BASE_DIR
     base_dir = Path(tmp_path)
     try:
-        db = get_db(base_dir / "data" / "bosshunter.db")
+        db = get_db(base_dir / "data" / "jobhunter_pro.db")
         try:
             for job_id in ("available", "legacy", "prefilter", "failed", "corrupt"):
                 insert_job(db, _job(job_id))

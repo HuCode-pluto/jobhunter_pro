@@ -7,14 +7,14 @@ clamping and orphan recovery without touching network or AI paths.
 import tempfile
 from pathlib import Path
 
-from bosshunter.collection_run_store import (
+from jobhunter_pro.collection_run_store import (
     create_collection_run,
     get_collection_run,
     list_collection_runs,
     mark_orphaned_collection_runs_stopped,
     update_collection_run,
 )
-from bosshunter.scoring_run_store import (
+from jobhunter_pro.scoring_run_store import (
     TERMINAL_RUN_STATUSES,
     create_scoring_run,
     get_scoring_run,

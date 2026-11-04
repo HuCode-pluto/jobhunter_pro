@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from bosshunter.web.resume_original import (
+from jobhunter_pro.web.resume_original import (
 	companion_pdf_exists,
 	companion_pdf_path,
 	remove_companion_pdf,

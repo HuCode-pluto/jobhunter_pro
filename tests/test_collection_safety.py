@@ -5,18 +5,18 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from bosshunter.config import DEFAULTS, load_config
-from bosshunter.db import (
+from jobhunter_pro.config import DEFAULTS, load_config
+from jobhunter_pro.db import (
     add_platform_access,
     count_platform_access_today,
     get_active_platform_safety_lock,
     get_db,
     set_platform_safety_lock,
 )
-from bosshunter.platform_safety import PlatformAccessGuard, PlatformSafetyStop
-from bosshunter.scraper.jobs import scrape_jobs
-from bosshunter.web.server import _execute_collect, _wait_for_collection_delivery_cooldown
-from bosshunter.web.tasks import WorkbenchTask
+from jobhunter_pro.platform_safety import PlatformAccessGuard, PlatformSafetyStop
+from jobhunter_pro.scraper.jobs import scrape_jobs
+from jobhunter_pro.web.server import _execute_collect, _wait_for_collection_delivery_cooldown
+from jobhunter_pro.web.tasks import WorkbenchTask
 
 class CollectionSafetyTests(unittest.TestCase):
     def test_default_limits_are_daily_only(self):
@@ -65,7 +65,7 @@ platforms:
 
     def test_default_budget_allows_search_and_detail_then_preserves_shared_cap(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db = get_db(Path(tmp) / "bosshunter.db")
+            db = get_db(Path(tmp) / "jobhunter_pro.db")
             try:
                 db.executemany(
                     "INSERT INTO platform_access_events (platform, stage, action) VALUES ('boss', 'collection', ?)",
@@ -90,7 +90,7 @@ platforms:
 
     def test_daily_access_limit_stops_before_the_next_page(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db = get_db(Path(tmp) / "bosshunter.db")
+            db = get_db(Path(tmp) / "jobhunter_pro.db")
             guard = PlatformAccessGuard(db, {"safety": {"daily_platform_page_limit": 500}}, "collection")
             for _ in range(30):
                 guard.reserve("search_page", daily_limit=30)
@@ -107,7 +107,7 @@ platforms:
 
     def test_global_page_budget_is_shared_across_workflows(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db = get_db(Path(tmp) / "bosshunter.db")
+            db = get_db(Path(tmp) / "jobhunter_pro.db")
             config = {"safety": {"daily_platform_page_limit": 2}}
             PlatformAccessGuard(db, config, "collection").reserve("search_page")
             PlatformAccessGuard(db, config, "send").reserve("job_page")
@@ -120,7 +120,7 @@ platforms:
 
     def test_external_page_events_do_not_consume_boss_page_budget(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db = get_db(Path(tmp) / "bosshunter.db")
+            db = get_db(Path(tmp) / "jobhunter_pro.db")
             add_platform_access(db, "collection", "search_page", platform="zhilian")
             guard = PlatformAccessGuard(db, {"safety": {"daily_platform_page_limit": 1}}, "collection")
             guard.reserve("search_page")
@@ -133,7 +133,7 @@ platforms:
 
     def test_risk_lock_survives_a_new_database_connection(self):
         with tempfile.TemporaryDirectory() as tmp:
-            db_path = Path(tmp) / "bosshunter.db"
+            db_path = Path(tmp) / "jobhunter_pro.db"
             db = get_db(db_path)
             set_platform_safety_lock(db, "captcha", minutes=30)
             db.close()
@@ -155,14 +155,14 @@ platforms:
             "search": {"max_pages": 1},
         }
 
-        with patch("bosshunter.scraper.jobs.get_db", return_value=db), \
-             patch("bosshunter.collection.platforms.boss.PlatformAccessGuard") as guard_cls, \
-             patch("bosshunter.scraper.jobs.Progress", return_value=context), \
-             patch("bosshunter.scraper.jobs.new_tab", return_value="worker"), \
-             patch("bosshunter.scraper.jobs.wait_for_load"), \
-             patch("bosshunter.scraper.jobs.evaluate", return_value=json.dumps({"risk": "captcha"})), \
-             patch("bosshunter.scraper.jobs.close_tab"), \
-             patch("bosshunter.scraper.jobs.time.sleep"):
+        with patch("jobhunter_pro.scraper.jobs.get_db", return_value=db), \
+             patch("jobhunter_pro.collection.platforms.boss.PlatformAccessGuard") as guard_cls, \
+             patch("jobhunter_pro.scraper.jobs.Progress", return_value=context), \
+             patch("jobhunter_pro.scraper.jobs.new_tab", return_value="worker"), \
+             patch("jobhunter_pro.scraper.jobs.wait_for_load"), \
+             patch("jobhunter_pro.scraper.jobs.evaluate", return_value=json.dumps({"risk": "captcha"})), \
+             patch("jobhunter_pro.scraper.jobs.close_tab"), \
+             patch("jobhunter_pro.scraper.jobs.time.sleep"):
             count = scrape_jobs(config, ["AI"])
 
         self.assertEqual(count, 0)
@@ -185,13 +185,13 @@ platforms:
             "search": {"max_pages": 1},
         }
 
-        with patch("bosshunter.scraper.jobs.get_db", return_value=db), \
-             patch("bosshunter.collection.platforms.boss.PlatformAccessGuard") as guard_cls, \
-             patch("bosshunter.scraper.jobs.Progress", return_value=context), \
-             patch("bosshunter.scraper.jobs.new_tab", return_value="worker"), \
-             patch("bosshunter.scraper.jobs.wait_for_load"), \
+        with patch("jobhunter_pro.scraper.jobs.get_db", return_value=db), \
+             patch("jobhunter_pro.collection.platforms.boss.PlatformAccessGuard") as guard_cls, \
+             patch("jobhunter_pro.scraper.jobs.Progress", return_value=context), \
+             patch("jobhunter_pro.scraper.jobs.new_tab", return_value="worker"), \
+             patch("jobhunter_pro.scraper.jobs.wait_for_load"), \
              patch(
-                 "bosshunter.scraper.jobs.evaluate",
+                 "jobhunter_pro.scraper.jobs.evaluate",
                  side_effect=[
                      json.dumps({"risk": "blocked", "evidence": "blocked_page"}),
                      json.dumps({"risk": None}),
@@ -200,9 +200,9 @@ platforms:
                      json.dumps([]),
                  ],
              ), \
-             patch("bosshunter.scraper.jobs.scroll"), \
-             patch("bosshunter.scraper.jobs.close_tab"), \
-             patch("bosshunter.scraper.jobs.time.sleep"):
+             patch("jobhunter_pro.scraper.jobs.scroll"), \
+             patch("jobhunter_pro.scraper.jobs.close_tab"), \
+             patch("jobhunter_pro.scraper.jobs.time.sleep"):
             count = scrape_jobs(config, ["AI"])
 
         self.assertEqual(count, 0)
@@ -222,12 +222,12 @@ platforms:
             "collection": {"max_consecutive_page_failures": 3},
         }
 
-        with patch("bosshunter.scraper.jobs.get_db", return_value=db), \
-             patch("bosshunter.collection.platforms.boss.PlatformAccessGuard") as guard_cls, \
-             patch("bosshunter.scraper.jobs.Progress", return_value=context), \
-             patch("bosshunter.scraper.jobs.new_tab", return_value=None), \
-             patch("bosshunter.scraper.jobs.close_tab"), \
-             patch("bosshunter.scraper.jobs.time.sleep"):
+        with patch("jobhunter_pro.scraper.jobs.get_db", return_value=db), \
+             patch("jobhunter_pro.collection.platforms.boss.PlatformAccessGuard") as guard_cls, \
+             patch("jobhunter_pro.scraper.jobs.Progress", return_value=context), \
+             patch("jobhunter_pro.scraper.jobs.new_tab", return_value=None), \
+             patch("jobhunter_pro.scraper.jobs.close_tab"), \
+             patch("jobhunter_pro.scraper.jobs.time.sleep"):
             count = scrape_jobs(config, ["AI"])
 
         self.assertEqual(count, 0)
@@ -242,8 +242,8 @@ platforms:
             collect_config["_workbench_collect_report"] = {"stop_reason": "daily_search_page_limit"}
             return 0
 
-        with patch("bosshunter.scraper.jobs.scrape_jobs", side_effect=fake_scrape), \
-             patch("bosshunter.ai.scorer.score_jobs", return_value=(0, 0)):
+        with patch("jobhunter_pro.scraper.jobs.scrape_jobs", side_effect=fake_scrape), \
+             patch("jobhunter_pro.ai.scorer.score_jobs", return_value=(0, 0)):
             _execute_collect(task, config)
 
         self.assertTrue(any("为了账户安全" in line and "单日搜索页上限" in line for line in task.logs))
@@ -275,7 +275,7 @@ platforms:
             }
         }
 
-        with patch("bosshunter.web.server.random.uniform", return_value=11.25) as choose:
+        with patch("jobhunter_pro.web.server.random.uniform", return_value=11.25) as choose:
             self.assertTrue(_wait_for_collection_delivery_cooldown(task, config))
             self.assertTrue(_wait_for_collection_delivery_cooldown(task, config))
 

@@ -2,7 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from bosshunter.web.greeting_activity import GreetingActivityRegistry
+from jobhunter_pro.web.greeting_activity import GreetingActivityRegistry
 
 
 def test_parallel_edits_cannot_claim_sending_job_but_can_claim_another():

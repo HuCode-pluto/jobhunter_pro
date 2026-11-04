@@ -7,8 +7,8 @@ from unittest.mock import patch
 import yaml
 from click.testing import CliRunner
 
-from bosshunter.config import load_config
-from bosshunter.main import cli
+from jobhunter_pro.config import load_config
+from jobhunter_pro.main import cli
 
 
 class AiServiceConfigTests(unittest.TestCase):
@@ -58,7 +58,7 @@ class AiStatusCliTests(unittest.TestCase):
 			]
 
 			try:
-				with patch("bosshunter.web.preflight.check_ai_connection", return_value=checks):
+				with patch("jobhunter_pro.web.preflight.check_ai_connection", return_value=checks):
 					result = CliRunner().invoke(cli, ["--config", str(config_path), "ai-status"])
 			finally:
 				os.chdir(original_cwd)

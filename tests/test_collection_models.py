@@ -1,6 +1,6 @@
 import unittest
 
-from bosshunter.collection.models import (
+from jobhunter_pro.collection.models import (
     CollectionProgress,
     JobCandidate,
     PlatformCollectionResult,

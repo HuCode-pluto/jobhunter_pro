@@ -1,9 +1,9 @@
 import tempfile
 from pathlib import Path
 
-from bosshunter.ai.scorer import _build_scoring_prompt
-from bosshunter.collection.models import JobCandidate, classify_recruitment_type
-from bosshunter.db import get_db, insert_job_if_new
+from jobhunter_pro.ai.scorer import _build_scoring_prompt
+from jobhunter_pro.collection.models import JobCandidate, classify_recruitment_type
+from jobhunter_pro.db import get_db, insert_job_if_new
 
 
 def test_recruitment_type_classification_is_conservative():

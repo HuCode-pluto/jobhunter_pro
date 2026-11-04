@@ -6,11 +6,11 @@ from unittest import TestCase
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
-from bosshunter.collection.base import CollectorHooks
-from bosshunter.collection.models import JobCandidate, PlatformCollectionRequest
-from bosshunter.collection.orchestrator import CollectionOrchestrator
-from bosshunter.collection.registry import CollectorRegistry
-from bosshunter.collection.platforms.boss import (
+from jobhunter_pro.collection.base import CollectorHooks
+from jobhunter_pro.collection.models import JobCandidate, PlatformCollectionRequest
+from jobhunter_pro.collection.orchestrator import CollectionOrchestrator
+from jobhunter_pro.collection.registry import CollectorRegistry
+from jobhunter_pro.collection.platforms.boss import (
     JS_DETECT_COLLECTION_RISK,
     JS_EXTRACT_DETAIL,
     JS_EXTRACT_LIST,
@@ -21,8 +21,8 @@ from bosshunter.collection.platforms.boss import (
     generate_boss_job_id,
     normalize_boss_search_filters,
 )
-from bosshunter.db import get_db, get_collected_combos, get_page_progress, mark_combo_collected, upsert_page_progress
-from bosshunter.collection_run_store import (
+from jobhunter_pro.db import get_db, get_collected_combos, get_page_progress, mark_combo_collected, upsert_page_progress
+from jobhunter_pro.collection_run_store import (
     boss_combo_key, get_collection_run, mark_orphaned_collection_runs_stopped,
 )
 
@@ -459,14 +459,14 @@ class BossFreshSearchTests(TestCase):
                     "keywords": ["AI"], "cities": ["北京"], "max_pages": 2,
                 }}}
                 if failure == "save":
-                    from bosshunter.collection.orchestrator import insert_job_if_new
+                    from jobhunter_pro.collection.orchestrator import insert_job_if_new
                     attempts = []
                     def save_after_failure(*args):
                         attempts.append(True)
                         if len(attempts) == 1:
                             raise RuntimeError("disk full")
                         return insert_job_if_new(*args)
-                    with patch("bosshunter.collection.orchestrator.insert_job_if_new",
+                    with patch("jobhunter_pro.collection.orchestrator.insert_job_if_new",
                                side_effect=save_after_failure):
                         result = CollectionOrchestrator({}, db_path=db_path, registry=registry).run(options)
                 else:
@@ -619,27 +619,27 @@ class BossEdgeCaseTests(TestCase):
     """boss.py 边界与异常路径。"""
 
     def test_normalize_filters_non_dict_returns_empty(self):
-        from bosshunter.collection.platforms.boss import normalize_boss_search_filters
+        from jobhunter_pro.collection.platforms.boss import normalize_boss_search_filters
         self.assertEqual(normalize_boss_search_filters(None), {})
         self.assertEqual(normalize_boss_search_filters("not a dict"), {})
         self.assertEqual(normalize_boss_search_filters([1, 2]), {})
 
     def test_wait_or_stop_with_stop_event_set(self):
         from threading import Event
-        from bosshunter.collection.platforms.boss import _wait_or_stop
+        from jobhunter_pro.collection.platforms.boss import _wait_or_stop
         stop = Event()
         stop.set()
         self.assertTrue(_wait_or_stop(stop, 10))
 
     def test_wait_or_stop_sleeps_without_event(self):
-        from bosshunter.collection.platforms.boss import _wait_or_stop
+        from jobhunter_pro.collection.platforms.boss import _wait_or_stop
         slept = []
         result = _wait_or_stop(None, 0.5, sleep=slept.append)
         self.assertFalse(result)
         self.assertEqual(slept, [0.5])
 
     def test_positive_int_invalid_returns_default(self):
-        from bosshunter.collection.platforms.boss import _positive_int
+        from jobhunter_pro.collection.platforms.boss import _positive_int
         self.assertEqual(_positive_int("abc", 60), 60)
         self.assertEqual(_positive_int(None, 150), 150)
         self.assertEqual(_positive_int(0, 60), 1)
@@ -647,7 +647,7 @@ class BossEdgeCaseTests(TestCase):
         self.assertEqual(_positive_int(10, 60), 10)
 
     def test_bounded_float_invalid_returns_default(self):
-        from bosshunter.collection.platforms.boss import _bounded_float
+        from jobhunter_pro.collection.platforms.boss import _bounded_float
         self.assertEqual(_bounded_float("abc", 1.5, 1.0, 5.0), 1.5)
         self.assertEqual(_bounded_float(None, 1.5, 1.0, 5.0), 1.5)
         self.assertEqual(_bounded_float(0.5, 1.5, 1.0, 5.0), 1.0)
@@ -762,7 +762,7 @@ class BossEdgeCaseTests(TestCase):
 class BossDetailScriptTests(TestCase):
     def test_detail_script_reads_hr_card_before_company_attr(self):
         """HR name and status live in .job-boss-info; .boss-info-attr only has company and title."""
-        from bosshunter.collection.platforms.boss import JS_EXTRACT_DETAIL
+        from jobhunter_pro.collection.platforms.boss import JS_EXTRACT_DETAIL
 
         self.assertIn(".job-boss-info", JS_EXTRACT_DETAIL)
         self.assertIn(".boss-online-tag", JS_EXTRACT_DETAIL)
@@ -770,7 +770,7 @@ class BossDetailScriptTests(TestCase):
         self.assertLess(JS_EXTRACT_DETAIL.index("const bossCard"), JS_EXTRACT_DETAIL.index("const bossAttr"))
 
     def test_activity_pattern_is_shared_by_extraction_and_name_cleanup(self):
-        from bosshunter.collection.platforms.boss import HR_ACTIVE_PATTERN, JS_EXTRACT_DETAIL
+        from jobhunter_pro.collection.platforms.boss import HR_ACTIVE_PATTERN, JS_EXTRACT_DETAIL
 
         self.assertNotIn("__HR_ACTIVE_PATTERN__", JS_EXTRACT_DETAIL)
         self.assertEqual(JS_EXTRACT_DETAIL.count(HR_ACTIVE_PATTERN), 2)
@@ -778,7 +778,7 @@ class BossDetailScriptTests(TestCase):
     def test_activity_pattern_covers_every_card_label(self):
         import re
 
-        from bosshunter.collection.platforms.boss import HR_ACTIVE_PATTERN
+        from jobhunter_pro.collection.platforms.boss import HR_ACTIVE_PATTERN
 
         labels = [
             "在线", "刚刚活跃", "今日活跃", "本周活跃", "本月活跃", "半年前活跃",
@@ -794,7 +794,7 @@ class BossDetailScriptTests(TestCase):
         import shutil
         import subprocess
 
-        from bosshunter.collection.platforms.boss import JS_EXTRACT_DETAIL
+        from jobhunter_pro.collection.platforms.boss import JS_EXTRACT_DETAIL
 
         node = shutil.which("node")
         if not node:

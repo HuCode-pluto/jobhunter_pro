@@ -1,6 +1,6 @@
 import unittest
 
-from bosshunter.collection.capabilities import PLATFORM_CAPABILITIES, platform_supports
+from jobhunter_pro.collection.capabilities import PLATFORM_CAPABILITIES, platform_supports
 
 
 class PlatformCapabilitiesTests(unittest.TestCase):

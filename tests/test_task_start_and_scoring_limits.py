@@ -14,14 +14,14 @@ from unittest.mock import Mock
 import pytest
 import yaml
 
-from bosshunter import db as db_module
-from bosshunter.ai import scorer
-from bosshunter.ai.credentials import AIRequestError
-from bosshunter.collection.models import JobCandidate, PlatformCollectionResult
-from bosshunter.collection.platforms.boss import BossCollector
-from bosshunter.scoring_run_store import get_scoring_run
-from bosshunter.web import server, tasks
-from bosshunter.web.tasks import TaskAlreadyRunningError, WorkbenchTaskRunner
+from jobhunter_pro import db as db_module
+from jobhunter_pro.ai import scorer
+from jobhunter_pro.ai.credentials import AIRequestError
+from jobhunter_pro.collection.models import JobCandidate, PlatformCollectionResult
+from jobhunter_pro.collection.platforms.boss import BossCollector
+from jobhunter_pro.scoring_run_store import get_scoring_run
+from jobhunter_pro.web import server, tasks
+from jobhunter_pro.web.tasks import TaskAlreadyRunningError, WorkbenchTaskRunner
 
 
 SCORE_RESPONSE = json.dumps({
@@ -67,7 +67,7 @@ def runtime(tmp_path, monkeypatch):
         "RESUME_DIR": tmp_path / "data/resumes", "CONFIG_PATH": tmp_path / "config.yaml",
     }.items():
         monkeypatch.setattr(server, name, value)
-    path = tmp_path / "data/bosshunter.db"
+    path = tmp_path / "data/jobhunter_pro.db"
     monkeypatch.setattr(db_module, "DB_PATH", path)
     (tmp_path / "resume.md").write_text("测试简历：产品经理，负责人工智能产品设计。", encoding="utf-8")
     server.CONFIG_PATH.write_text(yaml.safe_dump({

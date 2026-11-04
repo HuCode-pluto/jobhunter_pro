@@ -7,11 +7,11 @@ from unittest.mock import patch
 import pytest
 import yaml
 
-from bosshunter.config import load_config, save_config
-from bosshunter.db import get_db, insert_job, update_job_greeting, update_job_status
-from bosshunter.executor import monitor, sender
-from bosshunter.throttle import SendWindowChecker
-from bosshunter.web.tasks import WorkbenchTaskRunner
+from jobhunter_pro.config import load_config, save_config
+from jobhunter_pro.db import get_db, insert_job, update_job_greeting, update_job_status
+from jobhunter_pro.executor import monitor, sender
+from jobhunter_pro.throttle import SendWindowChecker
+from jobhunter_pro.web.tasks import WorkbenchTaskRunner
 
 INVALID_WINDOWS = [
     None, {}, "09:00-16:00", [None], [123], [""], ["garbage"],
@@ -82,7 +82,7 @@ def test_yaml_round_trip_and_last_window_task_admission(tmp_path):
     executed = Event()
     runner = WorkbenchTaskRunner({"monitor": lambda *_: executed.set()})
     now = datetime(2026, 10, 8, 16)  # noqa: DTZ001 - same local wall-clock boundary as the scheduler
-    with patch("bosshunter.web.tasks.datetime") as clock, patch("bosshunter.throttle.datetime") as window_clock:
+    with patch("jobhunter_pro.web.tasks.datetime") as clock, patch("jobhunter_pro.throttle.datetime") as window_clock:
         clock.now.return_value = now
         window_clock.now.return_value = now
         result = runner.start("monitor", config)

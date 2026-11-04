@@ -2,10 +2,10 @@ from unittest.mock import patch
 
 import pytest
 
-from bosshunter.ai import greeter
-from bosshunter.db import get_db, insert_job, update_job_status
-from bosshunter.web.greeting_activity import GreetingActivityRegistry
-from bosshunter.web import server
+from jobhunter_pro.ai import greeter
+from jobhunter_pro.db import get_db, insert_job, update_job_status
+from jobhunter_pro.web.greeting_activity import GreetingActivityRegistry
+from jobhunter_pro.web import server
 
 
 def make_job(db, job_id, status='approved', greeting=None, reviewed=None):

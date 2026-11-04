@@ -3386,6 +3386,1054 @@ def api_resume_delete():
 		return _json_response({"error": str(e)}, 500)
 
 
+# ─── Job Library APIs（手动求职流水线：粘贴 JD / 面试复盘 / 题库 / 技能地图） ───
+
+def _library_config() -> dict:
+	return load_config(CONFIG_PATH)
+
+
+def _library_llm():
+	from jobhunter_pro.manual.llm import ManualLLM
+
+	return ManualLLM(_library_config())
+
+
+def _library_output_dir() -> Path:
+	return DATA_DIR / "output"
+
+
+def _library_roles(config: dict) -> list[dict]:
+	"""目标岗位方向配置（config.yaml job_preferences.roles），过滤无效条目。"""
+	roles = config.get("job_preferences", {}).get("roles", [])
+	return [r for r in roles if isinstance(r, dict) and r.get("name")]
+
+
+def _library_resume(llm, config: dict) -> dict:
+	"""结构化简历：优先缓存，否则从 profile.resume_path 原文解析。"""
+	from jobhunter_pro.manual.resume import ensure_structured_resume
+
+	try:
+		return ensure_structured_resume(llm, config, DATA_DIR)
+	except ValueError as exc:
+		raise HTTPResponse(json.dumps({"error": str(exc)}, ensure_ascii=False), 400)
+
+
+def _library_error(exc: Exception) -> HTTPResponse:
+	"""把 LLM/业务错误归一化为 400 JSON；未知异常交由上层 500。"""
+	if isinstance(exc, AIRequestError):
+		return HTTPResponse(json.dumps({"error": exc.user_message}, ensure_ascii=False), 400)
+	raise exc
+
+
+def _run_manual_pipeline(llm, config: dict, conn, jd: dict, jd_text: str, role_type: str | None) -> dict:
+	"""解析结果 → 硬过滤 + 打分 → 入库 + 技能统计；分数达标生成定制材料。"""
+	from jobhunter_pro.manual.db import (
+		add_manual_application,
+		get_manual_application,
+		insert_manual_job,
+		upsert_manual_skill,
+	)
+	from jobhunter_pro.manual.matcher import GENERIC_ROLE_CFG, score_job
+	from jobhunter_pro.manual.resume_tailor import save_outputs, tailor
+
+	resume = _library_resume(llm, config)
+	roles = _library_roles(config)
+	role_name = role_type or ""
+	if not role_name:
+		role_name = next((r["name"] for r in roles if r["name"]), "")
+	target_names = {r["name"] for r in roles}
+	role_cfg = next((r for r in roles if r["name"] == role_name), GENERIC_ROLE_CFG)
+
+	fields = {
+		"role_type": role_name,
+		"jd_raw": jd_text,
+		"jd_json": json.dumps(jd, ensure_ascii=False),
+		"red_flags": "/".join(jd.get("red_flags", [])),
+		"jd_loaded": 1,
+	}
+	result = score_job(llm, resume, jd, jd_text, role_cfg)
+	if result["reasons"]:
+		fields.update({
+			"status": "rejected",
+			"match_score": result["score"],
+			"missing_skills": json.dumps(result.get("missing_skills", []), ensure_ascii=False),
+			"reject_reason": "；".join(result["reasons"]),
+		})
+		job_id = insert_manual_job(conn, fields)
+		for sp in jd.get("skill_points", []):
+			upsert_manual_skill(conn, sp["name"], role_name, sp.get("category", "其他"))
+		return {"job_id": job_id, "role": role_name, "reasons": result["reasons"], "score": result["score"]}
+
+	score = result["score"]
+	min_score = config.get("apply", {}).get("min_score", 60)
+	status = "matched" if score is not None and score >= min_score else "new"
+	fields.update({
+		"status": status,
+		"match_score": score,
+		"missing_skills": json.dumps(result.get("missing_skills", []), ensure_ascii=False),
+	})
+	job_id = insert_manual_job(conn, fields)
+	for sp in jd.get("skill_points", []):
+		upsert_manual_skill(conn, sp["name"], role_name, sp.get("category", "其他"))
+
+	summary = {"job_id": job_id, "role": role_name, "score": score,
+			   "summary": (result.get("report") or {}).get("summary", ""),
+			   "missing": result.get("missing_skills", [])}
+	if status == "matched" and role_name in target_names:
+		try:
+			content = tailor(llm, resume, jd)
+			files = save_outputs(job_id, jd.get("title", ""), content, _library_output_dir())
+			if not get_manual_application(conn, job_id):
+				add_manual_application(conn, job_id, files)
+			summary["tailored"] = True
+		except Exception as exc:
+			summary["tailor_error"] = str(exc)[:200]
+	return summary
+
+
+def _parse_jd_json(conn, job) -> dict | None:
+	if job["jd_json"]:
+		try:
+			return json.loads(job["jd_json"])
+		except (json.JSONDecodeError, TypeError):
+			return None
+	return None
+
+
+@app.route("/api/library/jobs")
+def api_library_jobs():
+	db = _get_web_db()
+	try:
+		from jobhunter_pro.manual.db import list_manual_jobs
+
+		role = (request.query.get("role") or "").strip()
+		status = (request.query.get("status") or "").strip()
+		min_score = request.query.get("min_score")
+		limit = _integer_param("limit", 100, minimum=1, maximum=500)
+		rows = list_manual_jobs(
+			db, role=role or None, status=status or None,
+			min_score=float(min_score) if min_score else None, limit=limit,
+		)
+		return _json_response([dict(r) for r in rows])
+	finally:
+		db.close()
+
+
+@app.route("/api/library/jobs/<job_id:int>")
+def api_library_job_detail(job_id: int):
+	db = _get_web_db()
+	try:
+		from jobhunter_pro.manual.db import get_manual_application, get_manual_job
+
+		job = get_manual_job(db, job_id)
+		if not job:
+			return _json_response({"error": "岗位不存在"}, 404)
+		data = dict(job)
+		data["jd_json"] = _parse_jd_json(db, job) or {}
+		if data["missing_skills"]:
+			try:
+				data["missing_skills"] = json.loads(data["missing_skills"])
+			except (json.JSONDecodeError, TypeError):
+				data["missing_skills"] = []
+		app = get_manual_application(db, job_id)
+		data["application"] = dict(app) if app else None
+		# 定制材料文件内容（打招呼语/求职信/定制简历）
+		for key in ("greeting_file", "cover_letter_file", "resume_file"):
+			content = ""
+			if app and app[key]:
+				try:
+					content = Path(app[key]).read_text(encoding="utf-8")
+				except OSError:
+					content = ""
+			data[key] = content
+		return _json_response(data)
+	finally:
+		db.close()
+
+
+@app.route("/api/library/jobs/manual", method="POST")
+def api_library_jobs_manual():
+	"""手动粘贴 JD（批量用一行 ====== 分隔）：解析 → 方向识别 → 打分 → 入库。"""
+	import re
+
+	from jobhunter_pro.manual.db import insert_manual_job, upsert_manual_skill
+	from jobhunter_pro.manual.jd_parser import detect_role, detect_role_llm, parse_jd
+	from jobhunter_pro.manual.matcher import GENERIC_ROLE_CFG, score_job
+
+	try:
+		body = request.json or {}
+		if not isinstance(body, dict):
+			return _json_response({"error": "请求体必须是对象"}, 400)
+		jd_text = str(body.get("jd_text") or "")
+		url = str(body.get("url") or "")
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	chunks = [c.strip() for c in re.split(r"\n\s*={3,}\s*\n", jd_text) if len(c.strip()) >= 20]
+	if not chunks:
+		return _json_response({"error": "JD 内容太短，请粘贴完整岗位描述（批量粘贴时多条之间用一行 ====== 分隔）"}, 400)
+	if len(chunks) > 10:
+		chunks = chunks[:10]
+
+	llm = _library_llm()
+	config = _library_config()
+	roles = _library_roles(config)
+	db = _get_web_db()
+	try:
+		results, errors = [], 0
+		for chunk in chunks:
+			try:
+				jd = parse_jd(llm, chunk)
+				if not (jd.get("title") or jd.get("responsibilities") or jd.get("must_have")):
+					results.append({"error": "无法从文本中识别岗位信息"})
+					errors += 1
+					continue
+				fields = {
+					"source": "manual", "url": url,
+					"company": jd.get("company", ""), "title": jd.get("title", ""),
+					"city": jd.get("city", ""), "salary_min": jd.get("salary_min"),
+					"salary_max": jd.get("salary_max"), "salary_note": jd.get("salary_note", ""),
+					"years_required": jd.get("years_required", ""),
+					"education_required": jd.get("education_required", ""),
+				}
+				role_name = detect_role(jd, roles) or detect_role_llm(llm, jd, roles) or "其他"
+				if role_name not in {r["name"] for r in roles}:
+					# 非目标方向：用通用标准打分（不做城市/薪资硬过滤），照常入库
+					resume = _library_resume(llm, config)
+					result = score_job(llm, resume, jd, chunk, GENERIC_ROLE_CFG)
+					fields.update({
+						"role_type": role_name, "status": "new",
+						"match_score": result["score"],
+						"missing_skills": json.dumps(result.get("missing_skills", []), ensure_ascii=False),
+					})
+					job_id = insert_manual_job(db, fields)
+					for sp in jd.get("skill_points", []):
+						upsert_manual_skill(db, sp["name"], role_name, sp.get("category", "其他"))
+					results.append({
+						"job_id": job_id, "role": role_name, "score": result["score"],
+						"note": f"已按「{role_name}」归档（非目标方向，按通用标准打分）",
+						"missing": result.get("missing_skills", []),
+						"summary": (result.get("report") or {}).get("summary", ""),
+					})
+					continue
+				# 目标方向：完整流水线（硬过滤 + 打分 + 达标定制）
+				summary = _run_manual_pipeline(llm, config, db, jd, chunk, role_name)
+				results.append(summary)
+			except HTTPResponse:
+				raise
+			except Exception as exc:
+				errors += 1
+				results.append({"error": str(exc)[:120]})
+		return _json_response({"ok": True, "count": len(results), "errors": errors, "results": results})
+	finally:
+		db.close()
+
+
+@app.route("/api/library/jobs/screenshot", method="POST")
+def api_library_jobs_screenshot():
+	"""截图识别：视觉模型把 JD 截图转成文本（手机 App 截图直接可用）。"""
+	try:
+		body = request.json or {}
+		if not isinstance(body, dict):
+			return _json_response({"error": "请求体必须是对象"}, 400)
+		image_base64 = str(body.get("image_base64") or "")
+		mime = str(body.get("mime") or "image/jpeg")
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	if not image_base64:
+		return _json_response({"error": "图片数据为空"}, 400)
+	llm = _library_llm()
+	try:
+		text = llm.chat_vision(
+			"你是招聘信息 OCR 助手。把图片中的招聘信息完整转成纯文本，"
+			"保留职位名称、公司、薪资、城市、职责、任职要求等所有内容，不要遗漏，不要添加评论。",
+			"请提取这张招聘信息截图中的全部文字：",
+			image_base64,
+			mime,
+		)
+	except Exception as exc:
+		return _library_error(exc)
+	if len(text.strip()) < 20:
+		return _json_response({"error": "截图识别结果过短，请确认图片是岗位信息且清晰完整"}, 400)
+	return _json_response({"text": text.strip()})
+
+
+@app.route("/api/library/jobs/fetch-link", method="POST")
+def api_library_jobs_fetch_link():
+	"""链接提取三通道：用户 Chrome（CDP）→ 服务器直抓 → 工具浏览器兜底。"""
+	try:
+		body = request.json or {}
+		url = str((body if isinstance(body, dict) else {}).get("url") or "")
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	if not url.startswith(("http://", "https://")):
+		return _json_response({"error": "请输入完整链接（http/https 开头）"}, 400)
+	from jobhunter_pro.manual.link_fetch import fetch_jd
+
+	try:
+		text = fetch_jd(url)
+	except ValueError as exc:
+		return _json_response({"error": str(exc)}, 400)
+	except Exception as exc:
+		return _json_response({"error": f"链接提取失败：{exc}"}, 500)
+	return _json_response({"text": text})
+
+
+@app.route("/api/library/jobs/<job_id:int>/role", method="POST")
+def api_library_job_role(job_id: int):
+	"""手动修正岗位方向（自由文本，如"技术支持工程师"）。"""
+	try:
+		body = request.json or {}
+		role_type = str((body if isinstance(body, dict) else {}).get("role_type") or "").strip()[:20]
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	if not role_type:
+		return _json_response({"error": "方向不能为空"}, 400)
+	from jobhunter_pro.manual.db import get_manual_job, update_manual_job
+
+	db = _get_web_db()
+	try:
+		if not get_manual_job(db, job_id):
+			return _json_response({"error": "岗位不存在"}, 404)
+		with job_mutation_lock:
+			update_manual_job(db, job_id, role_type=role_type)
+		return _json_response({"ok": True})
+	finally:
+		db.close()
+
+
+@app.route("/api/library/jobs/<job_id:int>/status", method="POST")
+def api_library_job_status(job_id: int):
+	"""岗位状态流转 + 投递台账同步（applied→submitted 等）。"""
+	from jobhunter_pro.manual.db import (
+		JOB_STATUSES,
+		get_manual_application,
+		get_manual_job,
+		update_manual_application,
+		update_manual_application_note,
+		update_manual_job,
+	)
+
+	try:
+		body = request.json or {}
+		if not isinstance(body, dict):
+			return _json_response({"error": "请求体必须是对象"}, 400)
+		status = str(body.get("status") or "")
+		note = str(body.get("note") or "")
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	if status not in JOB_STATUSES:
+		return _json_response({"error": f"非法状态，可选：{JOB_STATUSES}"}, 400)
+	db = _get_web_db()
+	try:
+		if not get_manual_job(db, job_id):
+			return _json_response({"error": "岗位不存在"}, 404)
+		with job_mutation_lock:
+			update_manual_job(db, job_id, status=status)
+			app_row = get_manual_application(db, job_id)
+			if app_row:
+				if status == "applied":
+					update_manual_application(db, job_id, "submitted", note)
+				elif status in ("interview", "offer", "rejected"):
+					update_manual_application(db, job_id, status, note)
+				elif note:
+					update_manual_application_note(db, job_id, note)
+		return _json_response({"ok": True})
+	finally:
+		db.close()
+
+
+def _library_process_one(job_id: int) -> tuple[int, dict]:
+	"""对单个岗位跑解析+打分+定制（幂等，可重复调用）。返回 (status_code, payload)。"""
+	from jobhunter_pro.manual.db import get_manual_job, update_manual_job
+	from jobhunter_pro.manual.jd_parser import parse_jd
+
+	llm = _library_llm()
+	config = _library_config()
+	db = _get_web_db()
+	try:
+		job = get_manual_job(db, job_id)
+		if not job:
+			return 404, {"error": "岗位不存在"}
+		jd = _parse_jd_json(db, job)
+		if not jd and job["jd_raw"]:
+			try:
+				jd = parse_jd(llm, job["jd_raw"])
+				update_manual_job(db, job_id, jd_json=json.dumps(jd, ensure_ascii=False))
+			except Exception as exc:
+				if isinstance(exc, AIRequestError):
+					return 400, {"error": exc.user_message}
+				raise
+		if not jd:
+			return 400, {"error": "该岗位没有 JD 原文，无法解析"}
+		try:
+			summary = _run_manual_pipeline(llm, config, db, jd, job["jd_raw"] or "", job["role_type"])
+		except HTTPResponse:
+			raise
+		except Exception as exc:
+			if isinstance(exc, AIRequestError):
+				return 400, {"error": exc.user_message}
+			raise
+		return 200, summary
+	finally:
+		db.close()
+
+
+@app.route("/api/library/jobs/<job_id:int>/process", method="POST")
+def api_library_job_process(job_id: int):
+	try:
+		status_code, payload = _library_process_one(job_id)
+	except HTTPResponse:
+		raise
+	except Exception as exc:
+		return _json_response({"error": str(exc)}, 500)
+	return _json_response(payload, status_code)
+
+
+@app.route("/api/library/jobs/batch-process", method="POST")
+def api_library_jobs_batch_process():
+	try:
+		body = request.json or {}
+		ids = body.get("ids") if isinstance(body, dict) else None
+		if not isinstance(ids, list) or not all(isinstance(i, int) for i in ids):
+			return _json_response({"error": "ids 必须是整数数组"}, 400)
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	results = []
+	for job_id in ids:
+		try:
+			status_code, payload = _library_process_one(job_id)
+		except HTTPResponse:
+			raise
+		except Exception as exc:
+			status_code, payload = 500, {"id": job_id, "error": str(exc)[:120]}
+		results.append({"id": job_id, **payload} if status_code == 200 else {"id": job_id, "error": payload.get("error", "处理失败")})
+	ok = sum(1 for r in results if not r.get("error"))
+	return _json_response({"results": results, "ok_count": ok})
+
+
+@app.route("/api/library/jobs/<job_id:int>/prep", method="POST")
+def api_library_job_prep(job_id: int):
+	"""面试准备包：已生成过直接返回缓存（cached=True），force=true 强制重新生成。"""
+	from jobhunter_pro.manual.db import get_manual_job, upsert_manual_prep_question
+	from jobhunter_pro.manual.interview_llm import prep_pack
+
+	force = request.query.get("force") == "true"
+	out = _library_output_dir() / f"{job_id:04d}" / "面试准备包.md"
+	if out.exists() and not force:
+		return _json_response({"ok": True, "path": str(out), "content": out.read_text(encoding="utf-8"), "cached": True})
+	llm = _library_llm()
+	config = _library_config()
+	db = _get_web_db()
+	try:
+		job = get_manual_job(db, job_id)
+		if not job:
+			return _json_response({"error": "岗位不存在"}, 404)
+		if not job["jd_json"]:
+			return _json_response({"error": "该岗位没有解析过的 JD，无法生成准备包"}, 400)
+		jd = json.loads(job["jd_json"])
+		try:
+			result = prep_pack(llm, jd, _library_resume(llm, config))
+		except HTTPResponse:
+			raise
+		except Exception as exc:
+			return _library_error(exc)
+		lines = [
+			f"# 面试准备包 — {jd.get('company', '')} · {jd.get('title', '')}",
+			"",
+			"## 预测问题 Top 10（按可能性排序）",
+			"",
+		]
+		for i, q in enumerate(result.get("questions", []), 1):
+			lines += [f"### {i}. {q.get('question', '')}", "",
+					  f"**为什么问**：{q.get('why', '')}", "",
+					  f"**参考回答**：{q.get('reference_answer', '')}", ""]
+		lines += ["## 面试策略建议", ""]
+		for t in result.get("tips", []):
+			lines.append(f"- {t}")
+		out.parent.mkdir(parents=True, exist_ok=True)
+		out.write_text("\n".join(lines), encoding="utf-8")
+		for q in result.get("questions", []):
+			if q.get("question"):
+				upsert_manual_prep_question(db, q["question"], job["role_type"], q.get("reference_answer", ""))
+		return _json_response({"ok": True, "path": str(out), "content": "\n".join(lines), "cached": False})
+	finally:
+		db.close()
+
+
+@app.route("/api/library/jobs/<job_id:int>/pdf", method="POST")
+def api_library_job_pdf(job_id: int):
+	"""把岗位定制简历（Markdown）导出为 PDF。"""
+	from jobhunter_pro.manual.db import get_manual_application, get_manual_job
+	from jobhunter_pro.manual.resume_pdf import export_tailored_resume
+
+	db = _get_web_db()
+	try:
+		job = get_manual_job(db, job_id)
+		if not job:
+			return _json_response({"error": "岗位不存在"}, 404)
+		app_row = get_manual_application(db, job_id)
+		if not app_row or not app_row["resume_file"]:
+			return _json_response({"error": "该岗位还没有定制简历，先在详情页点「生成定制内容」"}, 400)
+		path = Path(app_row["resume_file"])
+		if not path.exists():
+			return _json_response({"error": "定制简历文件不存在，请重新生成"}, 400)
+		try:
+			out = export_tailored_resume(job_id, path.read_text(encoding="utf-8"), _library_output_dir())
+		except Exception as exc:
+			return _json_response({"error": f"PDF 生成失败：{exc}"}, 500)
+		return _json_response({"ok": True, "path": str(out)})
+	finally:
+		db.close()
+
+
+@app.route("/api/library/jobs/<job_id:int>/application", method="PUT")
+def api_library_application_update(job_id: int):
+	"""投递台账：更新状态 + 备注（只追加备注不改状态时用 note-only）。"""
+	from jobhunter_pro.manual.db import (
+		get_manual_application,
+		update_manual_application,
+		update_manual_application_note,
+	)
+
+	try:
+		body = request.json or {}
+		if not isinstance(body, dict):
+			return _json_response({"error": "请求体必须是对象"}, 400)
+		status = str(body.get("status") or "")
+		note = str(body.get("note") or "")
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	valid = {"drafted", "submitted", "replied", "interview", "offer", "rejected"}
+	if status and status not in valid:
+		return _json_response({"error": f"非法状态，可选：{sorted(valid)}"}, 400)
+	db = _get_web_db()
+	try:
+		if not get_manual_application(db, job_id):
+			return _json_response({"error": "该岗位还没有投递记录"}, 404)
+		with job_mutation_lock:
+			if status:
+				update_manual_application(db, job_id, status, note)
+			elif note:
+				update_manual_application_note(db, job_id, note)
+		return _json_response({"ok": True})
+	finally:
+		db.close()
+
+
+# ─── 面试复盘 / 题库 ───
+
+def _process_interview_bg(iid: int, audio_path: str, transcript: str, job_id: int | None):
+	"""后台线程：转写 → LLM 复盘 → 入库（题库自动聚合）。"""
+	import threading
+
+	from jobhunter_pro.manual.db import (
+		get_manual_job,
+		rebuild_manual_question_bank,
+		save_manual_interview_questions,
+		update_manual_interview,
+	)
+	from jobhunter_pro.manual.interview_llm import analyze_interview
+
+	db = _get_web_db()
+	try:
+		llm = _library_llm()
+		config = _library_config()
+		if audio_path and not transcript:
+			from jobhunter_pro.manual.asr import transcribe
+
+			transcript = transcribe(Path(audio_path), config.get("asr", {}))
+		if not transcript.strip():
+			raise RuntimeError("没有可用转写文本（录音转写失败或未粘贴文本）")
+		update_manual_interview(db, iid, transcript=transcript, error="")
+		jd_info = None
+		if job_id:
+			job = get_manual_job(db, job_id)
+			if job and job["jd_json"]:
+				try:
+					jd_info = json.loads(job["jd_json"])
+				except (json.JSONDecodeError, TypeError):
+					jd_info = None
+		try:
+			resume = _library_resume(llm, config)
+		except HTTPResponse as exc:
+			detail = json.loads(exc.body).get("error", "简历不可用")
+			raise RuntimeError(detail) from exc
+		result = analyze_interview(llm, transcript, resume, jd_info)
+		update_manual_interview(
+			db, iid,
+			report_json=json.dumps(result, ensure_ascii=False),
+			self_score=result.get("summary", {}).get("overall_score"),
+			status="done",
+		)
+		save_manual_interview_questions(db, iid, result.get("questions", []))
+		rebuild_manual_question_bank(db)
+	except Exception as exc:
+		try:
+			update_manual_interview(db, iid, status="failed", error=str(exc)[:300])
+		except Exception:
+			pass
+	finally:
+		db.close()
+
+
+@app.route("/api/library/interviews")
+def api_library_interviews():
+	from jobhunter_pro.manual.db import list_manual_interviews
+
+	db = _get_web_db()
+	try:
+		return _json_response([dict(r) for r in list_manual_interviews(db)])
+	finally:
+		db.close()
+
+
+@app.route("/api/library/interviews", method="POST")
+def api_library_interview_upload():
+	"""上传面试录音（mp3/m4a/wav/mp4 等）或粘贴转写文本，后台异步复盘。"""
+	import threading
+	from datetime import datetime
+
+	from jobhunter_pro.manual.db import insert_manual_interview
+
+	job_id_raw = (request.forms.get("job_id") or "").strip()
+	job_id = int(job_id_raw) if job_id_raw.isdigit() else None
+	company = request.forms.get("company") or ""
+	position = request.forms.get("position") or ""
+	interview_date = request.forms.get("interview_date") or ""
+	transcript_text = (request.forms.get("transcript_text") or "").strip()
+	upload = request.files.get("file")
+
+	audio_path = ""
+	if upload is not None and getattr(upload, "filename", ""):
+		ext = Path(upload.filename).suffix.lower()
+		if ext not in (".mp3", ".m4a", ".wav", ".mp4", ".aac", ".flac", ".ogg"):
+			return _json_response({"error": "仅支持 mp3/m4a/wav/mp4/aac/flac/ogg 格式"}, 400)
+		iv_dir = DATA_DIR / "interviews"
+		iv_dir.mkdir(parents=True, exist_ok=True)
+		dest = iv_dir / f"{datetime.now():%Y%m%d_%H%M%S}_{Path(upload.filename).name}"
+		dest.write_bytes(upload.file.read())
+		if ext == ".mp4":
+			from jobhunter_pro.manual.asr import extract_audio, ffmpeg_available
+
+			if not ffmpeg_available():
+				return _json_response({"error": "处理 MP4 需要 ffmpeg：PowerShell 执行 winget install Gyan.FFmpeg"}, 400)
+			try:
+				audio_path = str(extract_audio(dest))
+			except RuntimeError as exc:
+				return _json_response({"error": str(exc)}, 400)
+		else:
+			audio_path = str(dest)
+	if not audio_path and not transcript_text:
+		return _json_response({"error": "请上传录音文件，或粘贴转写文本（会议自带字幕/手动转写）"}, 400)
+
+	db = _get_web_db()
+	try:
+		iid = insert_manual_interview(db, {
+			"job_id": job_id,
+			"company": company,
+			"position": position,
+			"interview_date": interview_date,
+			"audio_path": audio_path,
+		})
+	finally:
+		db.close()
+	threading.Thread(
+		target=_process_interview_bg,
+		args=(iid, audio_path, transcript_text, job_id),
+		daemon=True,
+	).start()
+	return _json_response({"ok": True, "id": iid, "note": "复盘进行中，请稍后在列表刷新状态"})
+
+
+@app.route("/api/library/interviews/<iid:int>")
+def api_library_interview_detail(iid: int):
+	from jobhunter_pro.manual.db import get_manual_interview, get_manual_interview_questions
+
+	db = _get_web_db()
+	try:
+		iv = get_manual_interview(db, iid)
+		if not iv:
+			return _json_response({"error": "面试记录不存在"}, 404)
+		data = dict(iv)
+		data["transcript"] = iv["transcript"] or ""
+		try:
+			data["report"] = json.loads(iv["report_json"]) if iv["report_json"] else {}
+		except (json.JSONDecodeError, TypeError):
+			data["report"] = {}
+		data["questions"] = [dict(q) for q in get_manual_interview_questions(db, iid)]
+		return _json_response(data)
+	finally:
+		db.close()
+
+
+@app.route("/api/library/interviews/<iid:int>/retry", method="POST")
+def api_library_interview_retry(iid: int):
+	import threading
+
+	from jobhunter_pro.manual.db import get_manual_interview, update_manual_interview
+
+	db = _get_web_db()
+	try:
+		iv = get_manual_interview(db, iid)
+		if not iv:
+			return _json_response({"error": "面试记录不存在"}, 404)
+		update_manual_interview(db, iid, status="processing", error="")
+		audio_path, transcript, job_id = iv["audio_path"] or "", iv["transcript"] or "", iv["job_id"]
+	finally:
+		db.close()
+	threading.Thread(target=_process_interview_bg, args=(iid, audio_path, transcript, job_id), daemon=True).start()
+	return _json_response({"ok": True})
+
+
+@app.route("/api/library/question-bank")
+def api_library_question_bank():
+	from jobhunter_pro.manual.db import list_manual_question_bank
+
+	role = (request.query.get("role") or "").strip()
+	limit = _integer_param("limit", 200, minimum=1, maximum=500)
+	db = _get_web_db()
+	try:
+		return _json_response([dict(r) for r in list_manual_question_bank(db, role=role or None, limit=limit)])
+	finally:
+		db.close()
+
+
+@app.route("/api/library/question-bank/rebuild", method="POST")
+def api_library_question_bank_rebuild():
+	from jobhunter_pro.manual.db import list_manual_question_bank, rebuild_manual_question_bank
+
+	db = _get_web_db()
+	try:
+		rebuild_manual_question_bank(db)
+		return _json_response({"ok": True, "count": len(list_manual_question_bank(db))})
+	finally:
+		db.close()
+
+
+# ─── 模拟面试 ───
+
+@app.route("/api/library/mock/start", method="POST")
+def api_library_mock_start():
+	from jobhunter_pro.manual.db import get_manual_job, insert_manual_mock_session
+	from jobhunter_pro.manual.interview_llm import mock_interviewer
+
+	try:
+		body = request.json or {}
+		if not isinstance(body, dict):
+			return _json_response({"error": "请求体必须是对象"}, 400)
+		role = str(body.get("role") or "")
+		job_id_raw = body.get("job_id")
+		job_id = int(job_id_raw) if isinstance(job_id_raw, int) else None
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	llm = _library_llm()
+	config = _library_config()
+	roles = _library_roles(config)
+	role = role or (roles[0]["name"] if roles else "技术")
+	jd_json = None
+	db = _get_web_db()
+	try:
+		if job_id:
+			job = get_manual_job(db, job_id)
+			if job and job["jd_json"]:
+				jd_json = _parse_jd_json(db, job)
+		try:
+			resume = _library_resume(llm, config)
+		except HTTPResponse:
+			raise
+		history = [{"role": "assistant", "content": f"你好，我是{role}方向的面试官，我们开始面试。请先做个简单自我介绍。"}]
+		try:
+			r = mock_interviewer(llm, role, resume, jd_json, history)
+		except Exception as exc:
+			return _library_error(exc)
+		history.append({"role": "assistant", "content": r.get("reply", "")})
+		sid = insert_manual_mock_session(db, {
+			"role_type": role, "job_id": job_id,
+			"messages": json.dumps(history, ensure_ascii=False),
+		})
+		return _json_response({"id": sid, "reply": history[-1]["content"], "finished": False, "history": history})
+	finally:
+		db.close()
+
+
+@app.route("/api/library/mock/answer", method="POST")
+def api_library_mock_answer():
+	from jobhunter_pro.manual.db import get_manual_job, get_manual_mock_session, update_manual_mock_session
+	from jobhunter_pro.manual.interview_llm import mock_interviewer
+
+	try:
+		body = request.json or {}
+		if not isinstance(body, dict):
+			return _json_response({"error": "请求体必须是对象"}, 400)
+		session_id = int(body.get("session_id"))
+		answer = str(body.get("answer") or "")
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	llm = _library_llm()
+	config = _library_config()
+	db = _get_web_db()
+	try:
+		s = get_manual_mock_session(db, session_id)
+		if not s:
+			return _json_response({"error": "模拟会话不存在"}, 404)
+		history = json.loads(s["messages"])
+		if s["finished"]:
+			return _json_response({"reply": "本次模拟已结束，可重新开始一场。", "finished": True, "history": history})
+		job = get_manual_job(db, s["job_id"]) if s["job_id"] else None
+		jd_json = _parse_jd_json(db, job) if job else None
+		history.append({"role": "user", "content": answer})
+		try:
+			r = mock_interviewer(llm, s["role_type"], _library_resume(llm, config), jd_json, history)
+		except HTTPResponse:
+			raise
+		except Exception as exc:
+			return _library_error(exc)
+		history.append({"role": "assistant", "content": r.get("reply", "")})
+		finished = bool(r.get("finished"))
+		update_manual_mock_session(db, session_id,
+								   messages=json.dumps(history, ensure_ascii=False),
+								   finished=1 if finished else 0)
+		return _json_response({"reply": history[-1]["content"], "finished": finished, "history": history})
+	finally:
+		db.close()
+
+
+# ─── 求职管理：周报 + Offer ───
+
+@app.route("/api/library/report/weekly")
+def api_library_report_weekly():
+	db = _get_web_db()
+	try:
+		total = db.execute("SELECT COUNT(*) FROM manual_jobs").fetchone()[0]
+		applied = db.execute("SELECT COUNT(*) FROM manual_jobs WHERE status IN ('applied','interview','offer')").fetchone()[0]
+		interviews_n = db.execute("SELECT COUNT(*) FROM manual_interviews").fetchone()[0]
+		offers_n = db.execute("SELECT COUNT(*) FROM manual_offers WHERE status != 'rejected'").fetchone()[0]
+		matched = db.execute("SELECT COUNT(*) FROM manual_jobs WHERE match_score >= 60").fetchone()[0]
+		avg_score = db.execute("SELECT AVG(match_score) FROM manual_jobs WHERE match_score IS NOT NULL").fetchone()[0]
+		by_status = {
+			r["status"]: r["n"]
+			for r in db.execute("SELECT status, COUNT(*) n FROM manual_jobs GROUP BY status").fetchall()
+		}
+		recent_iv = [
+			dict(r)
+			for r in db.execute(
+				"SELECT id, company, position, interview_date, self_score, status "
+				"FROM manual_interviews ORDER BY id DESC LIMIT 5"
+			).fetchall()
+		]
+		return _json_response({
+			"total_jobs": total,
+			"applied": applied,
+			"matched_60plus": matched,
+			"avg_score": round(avg_score, 1) if avg_score else None,
+			"interviews": interviews_n,
+			"offers": offers_n,
+			"by_status": by_status,
+			"recent_interviews": recent_iv,
+		})
+	finally:
+		db.close()
+
+
+@app.route("/api/library/offers")
+def api_library_offers():
+	from jobhunter_pro.manual.db import list_manual_offers
+
+	db = _get_web_db()
+	try:
+		return _json_response([dict(r) for r in list_manual_offers(db)])
+	finally:
+		db.close()
+
+
+@app.route("/api/library/offers", method="POST")
+def api_library_offer_add():
+	from jobhunter_pro.manual.db import insert_manual_offer
+
+	try:
+		body = request.json or {}
+		if not isinstance(body, dict):
+			return _json_response({"error": "请求体必须是对象"}, 400)
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	fields = {k: body.get(k) for k in (
+		"company", "position", "salary_min", "salary_max", "salary_note",
+		"city", "commute", "pros", "cons", "status",
+	) if k in body}
+	db = _get_web_db()
+	try:
+		oid = insert_manual_offer(db, fields)
+		return _json_response({"ok": True, "id": oid})
+	finally:
+		db.close()
+
+
+@app.route("/api/library/offers/<oid:int>", method="POST")
+def api_library_offer_update(oid: int):
+	from jobhunter_pro.manual.db import update_manual_offer
+
+	try:
+		body = request.json or {}
+		if not isinstance(body, dict):
+			return _json_response({"error": "请求体必须是对象"}, 400)
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	fields = {k: body[k] for k in (
+		"company", "position", "salary_min", "salary_max", "salary_note",
+		"city", "commute", "pros", "cons", "status",
+	) if k in body}
+	db = _get_web_db()
+	try:
+		update_manual_offer(db, oid, **fields)
+		return _json_response({"ok": True})
+	finally:
+		db.close()
+
+
+@app.route("/api/library/offers/<oid:int>/delete", method="POST")
+def api_library_offer_delete(oid: int):
+	from jobhunter_pro.manual.db import delete_manual_offer
+
+	db = _get_web_db()
+	try:
+		delete_manual_offer(db, oid)
+		return _json_response({"ok": True})
+	finally:
+		db.close()
+
+
+# ─── 技能地图 / 学习计划 ───
+
+def _library_markdown_response(markdown: str, path_value: str = "") -> str:
+	"""markdown2 后端渲染 HTML（house 模式），前端直接嵌入并复制原始 markdown。"""
+	import markdown2
+
+	html = markdown2.markdown(markdown, extras=["tables", "fenced-code-blocks"])
+	return _json_response({"markdown": markdown, "html": html, "path": path_value})
+
+
+@app.route("/api/library/skillmap")
+def api_library_skillmap():
+	from jobhunter_pro.manual.skillmap import build
+
+	role = (request.query.get("role") or "").strip()
+	top = _integer_param("top", 40, minimum=5, maximum=100)
+	with_llm = request.query.get("with_llm") == "true"
+	config = _library_config()
+	roles = _library_roles(config)
+	target = role or (roles[0]["name"] if roles else "")
+	if not target:
+		return _json_response({"error": "未配置岗位方向"}, 400)
+	llm = _library_llm() if with_llm else None
+	db = _get_web_db()
+	try:
+		out = build(db, target, _library_output_dir(), top=top, llm=llm)
+	finally:
+		db.close()
+	if not out:
+		return _json_response({"markdown": "", "html": "", "path": ""})
+	return _library_markdown_response(out.read_text(encoding="utf-8"), str(out))
+
+
+@app.route("/api/library/study-plan", method="POST")
+def api_library_study_plan():
+	from jobhunter_pro.manual.study_plan import build_plan
+
+	try:
+		body = request.json or {}
+		role = str((body if isinstance(body, dict) else {}).get("role") or "").strip()
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	config = _library_config()
+	roles = _library_roles(config)
+	target = role or (roles[0]["name"] if roles else "")
+	if not target:
+		return _json_response({"error": "未配置岗位方向"}, 400)
+	llm = _library_llm()
+	db = _get_web_db()
+	try:
+		try:
+			out, md = build_plan(llm, db, target, _library_output_dir())
+		except ValueError as exc:
+			return _json_response({"error": str(exc)}, 400)
+		except Exception as exc:
+			return _library_error(exc)
+	finally:
+		db.close()
+	return _library_markdown_response(md, str(out))
+
+
+# ─── 简历（结构化管理） ───
+
+@app.route("/api/library/resume/parse", method="POST")
+def api_library_resume_parse():
+	"""解析简历原文（或当前 profile.resume_path）→ 结构化简历并缓存。"""
+	from jobhunter_pro.manual.resume import save_structured_resume, structured_resume_path
+	from jobhunter_pro.manual.resume_parser import parse_resume
+
+	try:
+		body = request.json or {}
+		text = str((body if isinstance(body, dict) else {}).get("text") or "").strip()
+	except (ValueError, TypeError):
+		return _json_response({"error": "请求体格式无效"}, 400)
+	if not text:
+		resume_path = Path(str(_library_config().get("profile", {}).get("resume_path") or "resume.md"))
+		if resume_path.exists():
+			try:
+				text = resume_path.read_text(encoding="utf-8")
+			except (OSError, UnicodeDecodeError):
+				return _json_response({"error": "简历文件读取失败"}, 400)
+	if not text.strip():
+		return _json_response({"error": "请先上传简历（设置 → 简历），或直接粘贴简历文本"}, 400)
+	llm = _library_llm()
+	try:
+		structured = parse_resume(llm, text)
+	except Exception as exc:
+		return _library_error(exc)
+	if not isinstance(structured, dict) or not structured.get("basic"):
+		return _json_response({"error": "简历解析失败：AI 未返回有效的结构化简历"}, 400)
+	path = save_structured_resume(DATA_DIR, structured)
+	return _json_response({"ok": True, "path": str(path), "resume": structured})
+
+
+@app.route("/api/library/resume/structured")
+def api_library_resume_structured():
+	from jobhunter_pro.manual.resume import load_structured_resume, structured_resume_path
+
+	data = load_structured_resume(DATA_DIR)
+	return _json_response({"exists": bool(data), "path": str(structured_resume_path(DATA_DIR)), "resume": data or {}})
+
+
+@app.route("/api/library/resume/pdf", method="POST")
+def api_library_resume_pdf():
+	"""把结构化简历导出为 PDF。"""
+	from jobhunter_pro.manual.resume_pdf import export_base_resume
+
+	llm = _library_llm()
+	config = _library_config()
+	try:
+		resume = _library_resume(llm, config)
+	except HTTPResponse:
+		raise
+	try:
+		out = export_base_resume(resume, _library_output_dir())
+	except Exception as exc:
+		return _json_response({"error": f"PDF 生成失败：{exc}"}, 500)
+	return _json_response({"ok": True, "path": str(out)})
+
+
+@app.route("/api/library/materials/seed", method="POST")
+def api_library_materials_seed():
+	from jobhunter_pro.manual.db import seed_manual_materials
+
+	db = _get_web_db()
+	try:
+		count = seed_manual_materials(db)
+		return _json_response({"ok": True, "added": count})
+	finally:
+		db.close()
+
+
 # ─── Static Files + SPA Fallback ─────────────────────────
 
 _STATIC_MIME_TYPES = {

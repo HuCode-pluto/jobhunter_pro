@@ -208,6 +208,28 @@ DEFAULTS: dict[str, Any] = {
         "enable_port_guard": True,
         "site_patterns": True,
     },
+    "job_preferences": {
+        # 手动流水线：目标岗位方向。keywords 命中 JD 即归入该方向；cities/salary_min/
+        # exclude_keywords 用于硬条件过滤。留空 = 只评估匹配度不做硬过滤。
+        "roles": [],
+    },
+    "apply": {
+        "min_score": 60,
+        "max_per_day": 20,
+    },
+    "vision_llm": {
+        # 截图识别（JD 截图 → 文本）。默认智谱 GLM-4V-Flash（免费），
+        # Key 从环境变量 ZHIPU_API_KEY 读取，不写进 config.yaml。
+        "base_url": "https://open.bigmodel.cn/api/paas/v4",
+        "api_key_env": "ZHIPU_API_KEY",
+        "model": "glm-4v-flash",
+        "timeout_seconds": 60,
+    },
+    "asr": {
+        # 面试录音转写：paste=手动粘贴转写文本；whisper=本地 faster-whisper
+        "provider": "paste",
+        "whisper_model": "small",
+    },
 }
 
 

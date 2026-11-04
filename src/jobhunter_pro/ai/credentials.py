@@ -763,3 +763,121 @@ def _normalize_model_name(name: str) -> str:
 
 def _model_tokens(name: str) -> set[str]:
     return {token for token in re.split(r"[\s._-]+", name.lower()) if token}
+
+
+# ─── Manual pipeline (job library) extensions ───
+
+def call_openai_compatible_chat(
+    messages: list[dict],
+    config: dict,
+    max_tokens: int,
+    *,
+    json_mode: bool = False,
+    temperature: float = 0.3,
+    timeout: float | None = None,
+) -> str:
+    """Call an OpenAI-compatible chat completions endpoint with a full message list.
+
+    Generalizes call_openai_compatible_text for the manual job pipeline: system
+    messages, caller-chosen temperature and JSON output mode (response_format).
+    The library pipeline needs an OpenAI-compatible provider; Anthropic-only
+    configs get an explicit error instead of a silent protocol mismatch.
+    """
+    ai_cfg = config.get("ai", {}) if isinstance(config, dict) else {}
+    if ai_cfg.get("provider", "anthropic") != "openai_compatible":
+        raise AIRequestError(
+            "unsupported_provider",
+            "手动求职流水线需要 OpenAI 兼容协议（DeepSeek/豆包/自定义），当前 AI 服务商不支持",
+        )
+    api_key = get_ai_api_key(config)
+    base_url = get_ai_base_url(config)
+    if not api_key or not base_url:
+        raise AIRequestError("auth", "未配置 AI 的 API Key 或 Base URL")
+
+    model = get_openai_compatible_model(config)
+    payload = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
+    request_timeout = _coerce_timeout(timeout if timeout is not None else ai_cfg.get("timeout_seconds", 60))
+    response = None
+    try:
+        response = httpx.post(
+            f"{base_url.rstrip('/')}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=request_timeout,
+            trust_env=False,
+        )
+        response.raise_for_status()
+    except Exception as exc:
+        raise normalize_ai_error(exc, response) from exc
+
+    payload_data = response.json()
+    choices = payload_data.get("choices", []) if isinstance(payload_data, dict) else []
+    if choices and isinstance(choices[0], dict):
+        message = choices[0].get("message", {})
+        content = message.get("content") if isinstance(message, dict) else None
+        text = _extract_text_content(content)
+        if not text:
+            text = _extract_text_content(choices[0].get("text"))
+        if text:
+            return text
+    raise AIRequestError("empty_response", "AI 服务没有返回文本内容")
+
+
+def get_vision_credentials(config: dict) -> dict:
+    """Resolve the vision LLM section used by screenshot OCR."""
+    vision = config.get("vision_llm", {}) if isinstance(config, dict) else {}
+    return {
+        "base_url": str(vision.get("base_url") or "https://open.bigmodel.cn/api/paas/v4").rstrip("/"),
+        "api_key_env": str(vision.get("api_key_env") or "ZHIPU_API_KEY"),
+        "model": str(vision.get("model") or "glm-4v-flash"),
+        "timeout_seconds": _coerce_timeout(vision.get("timeout_seconds"), 60.0),
+    }
+
+
+def call_vision_text(image_base64: str, mime: str, prompt: str, config: dict) -> str:
+    """Send an image + prompt to the vision LLM (default Zhipu GLM-4V-Flash)."""
+    vcfg = get_vision_credentials(config)
+    api_key = os.environ.get(vcfg["api_key_env"], "")
+    if not api_key:
+        raise AIRequestError("auth", f"未设置 {vcfg['api_key_env']} 环境变量（截图识别需要视觉模型 Key）")
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_base64}"}},
+            ],
+        }
+    ]
+    payload = {"model": vcfg["model"], "messages": messages, "max_tokens": 4096, "temperature": 0.2}
+    response = None
+    try:
+        response = httpx.post(
+            f"{vcfg['base_url']}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=vcfg["timeout_seconds"],
+            trust_env=False,
+        )
+        response.raise_for_status()
+    except Exception as exc:
+        raise normalize_ai_error(exc, response) from exc
+
+    payload_data = response.json()
+    choices = payload_data.get("choices", []) if isinstance(payload_data, dict) else []
+    if choices and isinstance(choices[0], dict):
+        message = choices[0].get("message", {})
+        content = message.get("content") if isinstance(message, dict) else None
+        text = _extract_text_content(content)
+        if not text:
+            text = _extract_text_content(choices[0].get("text"))
+        if text:
+            return text
+    raise AIRequestError("empty_response", "视觉模型没有返回识别文本")

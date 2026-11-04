@@ -177,6 +177,150 @@ def _init_tables(conn: sqlite3.Connection) -> None:
     _init_collection_runs(conn)
     _init_collect_progress(conn)
     _init_score_traces(conn)
+    _init_manual_tables(conn)
+
+
+def _init_manual_tables(conn: sqlite3.Connection) -> None:
+    """手动流水线（岗位库/面试/题库/技能地图）的表，统一 manual_ 前缀。
+
+    时间戳用 CURRENT_TIMESTAMP（UTC）与 house 约定一致。学习资料种子库在
+    表为空时自动播种（包内 data/seed_materials*.sql）。
+    """
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS manual_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role_type TEXT NOT NULL DEFAULT '',
+            source TEXT NOT NULL DEFAULT 'manual',
+            url TEXT DEFAULT '',
+            company TEXT DEFAULT '',
+            title TEXT DEFAULT '',
+            city TEXT DEFAULT '',
+            salary_min REAL,
+            salary_max REAL,
+            salary_note TEXT DEFAULT '',
+            years_required TEXT DEFAULT '',
+            education_required TEXT DEFAULT '',
+            jd_raw TEXT DEFAULT '',
+            jd_json TEXT DEFAULT '',
+            jd_loaded INTEGER NOT NULL DEFAULT 1,
+            red_flags TEXT DEFAULT '',
+            match_score REAL,
+            missing_skills TEXT DEFAULT '',
+            reject_reason TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'new',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_manual_jobs_role ON manual_jobs(role_type);
+        CREATE INDEX IF NOT EXISTS idx_manual_jobs_status ON manual_jobs(status);
+
+        CREATE TABLE IF NOT EXISTS manual_applications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id INTEGER NOT NULL REFERENCES manual_jobs(id) ON DELETE CASCADE,
+            status TEXT NOT NULL DEFAULT 'drafted',
+            resume_file TEXT DEFAULT '',
+            greeting_file TEXT DEFAULT '',
+            cover_letter_file TEXT DEFAULT '',
+            submitted_at TIMESTAMP,
+            notes TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS manual_skills (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            role_type TEXT NOT NULL DEFAULT '',
+            category TEXT DEFAULT '',
+            frequency INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(name, role_type)
+        );
+
+        CREATE TABLE IF NOT EXISTS manual_materials (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            keywords TEXT NOT NULL,
+            title TEXT NOT NULL,
+            type TEXT NOT NULL DEFAULT 'doc',
+            url TEXT NOT NULL,
+            summary TEXT DEFAULT '',
+            verified INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_manual_materials_url ON manual_materials(url);
+
+        CREATE TABLE IF NOT EXISTS manual_interviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id INTEGER REFERENCES manual_jobs(id) ON DELETE SET NULL,
+            company TEXT DEFAULT '',
+            position TEXT DEFAULT '',
+            interview_date TEXT DEFAULT '',
+            audio_path TEXT DEFAULT '',
+            transcript TEXT DEFAULT '',
+            report_json TEXT DEFAULT '',
+            self_score REAL,
+            status TEXT NOT NULL DEFAULT 'processing',
+            error TEXT DEFAULT '',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS manual_interview_questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            interview_id INTEGER NOT NULL REFERENCES manual_interviews(id) ON DELETE CASCADE,
+            seq INTEGER DEFAULT 0,
+            question TEXT NOT NULL,
+            category TEXT DEFAULT '',
+            your_answer TEXT DEFAULT '',
+            your_answer_rating INTEGER DEFAULT 0,
+            reference_answer TEXT DEFAULT '',
+            gap TEXT DEFAULT ''
+        );
+
+        CREATE TABLE IF NOT EXISTS manual_question_bank (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            question TEXT NOT NULL,
+            role_type TEXT DEFAULT '',
+            category TEXT DEFAULT '',
+            frequency INTEGER NOT NULL DEFAULT 0,
+            reference_answer TEXT DEFAULT '',
+            source TEXT NOT NULL DEFAULT 'interview',
+            UNIQUE(question, role_type)
+        );
+
+        CREATE TABLE IF NOT EXISTS manual_mock_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            role_type TEXT DEFAULT '',
+            job_id INTEGER REFERENCES manual_jobs(id) ON DELETE SET NULL,
+            messages TEXT DEFAULT '',
+            finished INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS manual_offers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            company TEXT DEFAULT '',
+            position TEXT DEFAULT '',
+            salary_min REAL,
+            salary_max REAL,
+            salary_note TEXT DEFAULT '',
+            city TEXT DEFAULT '',
+            commute TEXT DEFAULT '',
+            pros TEXT DEFAULT '',
+            cons TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    conn.commit()
+    _seed_manual_materials_if_empty(conn)
+
+
+def _seed_manual_materials_if_empty(conn: sqlite3.Connection) -> None:
+    """学习资料种子库：表为空时自动导入包内 seed_materials*.sql（幂等）。"""
+    count = conn.execute("SELECT COUNT(*) FROM manual_materials").fetchone()[0]
+    if count:
+        return
+    from jobhunter_pro.manual.db import seed_manual_materials
+
+    seed_manual_materials(conn)
 
 
 def job_exists(conn: sqlite3.Connection, job_id: str) -> bool:

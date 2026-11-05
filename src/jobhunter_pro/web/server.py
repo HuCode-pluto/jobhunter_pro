@@ -12,7 +12,10 @@ from ipaddress import ip_address
 from urllib.parse import urlsplit
 import math
 import mimetypes
+import os
 import random
+import shutil
+import subprocess
 import time
 from copy import deepcopy
 from pathlib import Path
@@ -197,6 +200,15 @@ DATA_DIR = BASE_DIR / "data"
 RESUME_DIR = DATA_DIR / "resumes"
 CONFIG_PATH = BASE_DIR / "config.yaml"
 
+# 登录入口统一走官网首页；未登录时站点会自行引导到登录流程，
+# 避免硬编码的登录 URL 随平台改版失效。
+PLATFORM_LOGIN_URLS = {
+	"boss": "https://www.zhipin.com/",
+	"zhilian": "https://www.zhaopin.com/",
+	"51job": "https://we.51job.com/",
+	"liepin": "https://www.liepin.com/",
+}
+
 
 def set_base_dir(base_dir: Path | str) -> None:
 	"""Set the runtime directory used for config.yaml, data, and uploads."""
@@ -227,6 +239,55 @@ def _json_response(data, status_code=200):
 	response.content_type = "application/json; charset=utf-8"
 	response.status = status_code
 	return json.dumps(data, ensure_ascii=False, default=str)
+
+
+def _current_systemd_unit() -> str | None:
+	"""Return the systemd user unit running this process, if any."""
+	if not os.environ.get("INVOCATION_ID"):
+		return None
+	try:
+		cgroup = Path("/proc/self/cgroup").read_text(encoding="utf-8")
+	except OSError:
+		cgroup = ""
+	for line in cgroup.splitlines():
+		for part in line.split("/"):
+			if (
+				part.endswith(".service")
+				and "jobhunter" in part
+				and all(ch.isalnum() or ch in "@._-" for ch in part)
+			):
+				return part
+	return "jobhunter-panel.service"
+
+
+def _schedule_panel_restart(unit: str) -> None:
+	"""Ask systemd to restart the panel outside this process' cgroup."""
+	env = os.environ.copy()
+	runtime_dir = env.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+	env.setdefault("XDG_RUNTIME_DIR", runtime_dir)
+	env.setdefault("DBUS_SESSION_BUS_ADDRESS", f"unix:path={runtime_dir}/bus")
+	if shutil.which("systemd-run"):
+		# A transient timer runs the restart outside jobhunter-panel.service,
+		# so systemd cannot kill the restart command together with the panel.
+		cmd = [
+			"systemd-run", "--user", "--collect", "--quiet",
+			"--on-active=1",
+			f"--unit=jobhunter-panel-restart-{uuid4().hex[:8]}",
+			"systemctl", "--user", "restart", unit,
+		]
+	else:
+		cmd = [
+			"bash", "-lc",
+			f"sleep 1; systemctl --user restart --no-block {unit}",
+		]
+	subprocess.Popen(
+		cmd,
+		env=env,
+		stdout=subprocess.DEVNULL,
+		stderr=subprocess.DEVNULL,
+		stdin=subprocess.DEVNULL,
+		start_new_session=True,
+	)
 
 
 def _serialize_history_items(items):
@@ -1063,6 +1124,53 @@ task_runner._executors.update({
 @app.route("/api/health")
 def health():
 	return _json_response({"status": "ok", "version": __version__})
+
+
+@app.route("/api/browser/open-platform", method="POST")
+def api_browser_open_platform():
+	"""Open a recruitment site's login entry in the controlled Chrome."""
+	try:
+		payload = request.json or {}
+	except Exception:
+		payload = {}
+	platform = str(payload.get("platform") or "").strip().lower()
+	url = PLATFORM_LOGIN_URLS.get(platform)
+	if not url:
+		return _json_response({"error": "不支持的平台"}, 400)
+
+	from jobhunter_pro.browser import new_tab
+
+	try:
+		target_id = new_tab(url, background=False)
+	except Exception as exc:
+		return _json_response({"error": f"打开登录页失败：{exc}"}, 503)
+	if not target_id:
+		return _json_response({"error": "未连接专用 Chrome，请先确认 Chrome 已启动"}, 503)
+	return _json_response({
+		"success": True,
+		"platform": platform,
+		"url": url,
+		"target_id": target_id,
+	})
+
+
+@app.route("/api/system/restart", method="POST")
+def api_system_restart():
+	"""Restart the local panel through its systemd user unit."""
+	unit = _current_systemd_unit()
+	if not unit or not shutil.which("systemctl"):
+		return _json_response({
+			"error": "当前不是 systemd 运行方式，无法自动重启；请关闭面板后重新启动。",
+		}, 501)
+	try:
+		_schedule_panel_restart(unit)
+	except OSError as exc:
+		return _json_response({"error": f"启动重启命令失败：{exc}"}, 500)
+	return _json_response({
+		"success": True,
+		"message": "服务正在重启，约 3 秒后自动恢复",
+		"unit": unit,
+	})
 
 
 # ─── Dashboard APIs ──────────────────────────────────────

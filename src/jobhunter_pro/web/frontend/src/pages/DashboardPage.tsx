@@ -9,6 +9,7 @@ import { RecycleBinPanel } from '@/components/dashboard/RecycleBinPanel'
 import { TaskScoringProgress } from '@/components/dashboard/ScoringProgress'
 import { ScoreJobsDialog } from '@/components/dashboard/ScoreJobsDialog'
 import { CollectJobsDialog } from '@/components/dashboard/CollectJobsDialog'
+import { QuickActions } from '@/components/dashboard/QuickActions'
 import { TrendChart } from '@/components/dashboard/TrendChart'
 import { TopCompanies } from '@/components/dashboard/TopCompanies'
 import { PipelineFlow } from '@/components/dashboard/PipelineFlow'
@@ -860,6 +861,7 @@ export default function DashboardPage({ view = 'workbench' }: DashboardPageProps
           onRetry={retryPreflight}
         />
       )}
+      <QuickActions onNotice={setNotice} />
       <section id="today-workbench" className="scroll-mt-6 rounded-2xl border border-card-border bg-card p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
           <h2 className="text-lg font-bold tracking-tight">今日求职行动</h2>

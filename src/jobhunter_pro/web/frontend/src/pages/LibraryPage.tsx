@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  Archive,
   BriefcaseBusiness,
+  Download,
   ExternalLink,
   Loader2,
   Plus,
   RefreshCw,
+  RotateCcw,
   Sparkles,
+  Trash2,
 } from 'lucide-react'
+import { ScoreJobsDialog } from '@/components/dashboard/ScoreJobsDialog'
 import { AddJobDialog } from '@/components/library/AddJobDialog'
 import { JobDetailModal } from '@/components/library/JobDetailModal'
 import { Button } from '@/components/ui/button'
@@ -44,6 +49,8 @@ export interface LibraryJob {
   salary_note: string
   reject_reason: string
   created_at: string
+  deleted_at: string | null
+  deleted_reason: string | null
 }
 
 type Feedback = { type: 'success' | 'error'; text: string }
@@ -108,6 +115,9 @@ export default function LibraryPage() {
   const [detailJobId, setDetailJobId] = useState<string | null>(null)
   const [processingIds, setProcessingIds] = useState<string[]>([])
   const [batchProcessing, setBatchProcessing] = useState(false)
+  const [viewMode, setViewMode] = useState<'jobs' | 'recycle'>('jobs')
+  const [scoreDialogOpen, setScoreDialogOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const feedbackTimer = useRef<number | null>(null)
   const requestRevision = useRef(0)
 
@@ -132,10 +142,13 @@ export default function LibraryPage() {
     setLoading(true)
     setLoadError('')
     const params = new URLSearchParams()
-    if (role.trim()) params.set('role', role.trim())
-    if (status) params.set('status', status)
-    if (source) params.set('source', source)
-    if (keyword.trim()) params.set('keyword', keyword.trim())
+    params.set('deleted', viewMode === 'recycle' ? 'only' : 'active')
+    if (viewMode === 'jobs') {
+      if (role.trim()) params.set('role', role.trim())
+      if (status) params.set('status', status)
+      if (source) params.set('source', source)
+      if (keyword.trim()) params.set('keyword', keyword.trim())
+    }
     if (minScore.trim()) {
       const parsed = Number(minScore)
       if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) {
@@ -183,6 +196,12 @@ export default function LibraryPage() {
       if (feedbackTimer.current) window.clearTimeout(feedbackTimer.current)
     }
   }, [])
+
+  // 切换 岗位列表/回收站 视图时重新加载
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    void loadJobs()
+  }, [viewMode])
 
   const processJob = async (job: LibraryJob) => {
     if (processingIds.includes(job.id) || batchProcessing) return
@@ -234,6 +253,129 @@ export default function LibraryPage() {
       showFeedback('error', err instanceof Error ? err.message : '批量处理失败')
     } finally {
       setBatchProcessing(false)
+    }
+  }
+
+  const softDeleteJobs = async (ids: string[], reason = '用户移入回收站') => {
+    if (!ids.length || batchProcessing) return
+    setBatchProcessing(true)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/jobs/soft-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: ids, confirmed: true, reason }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '移入回收站失败')
+      showFeedback('success', `已移入回收站 ${ids.length} 条`)
+      setSelectedIds([])
+      await loadJobs()
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : '移入回收站失败')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  const restoreJobs = async (ids: string[]) => {
+    if (!ids.length || batchProcessing) return
+    setBatchProcessing(true)
+    try {
+      const res = await fetch('/api/jobs/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: ids }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '恢复失败')
+      showFeedback('success', `已恢复 ${ids.length} 条`)
+      setSelectedIds([])
+      await loadJobs()
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : '恢复失败')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  const permanentDeleteJobs = async (ids: string[]) => {
+    if (!ids.length || batchProcessing) return
+    if (!window.confirm(`确定彻底删除 ${ids.length} 条岗位吗？此操作不可恢复。`)) return
+    setBatchProcessing(true)
+    try {
+      const res = await fetch('/api/jobs/permanent-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: ids, confirmed: true }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '彻底删除失败')
+      showFeedback('success', `已彻底删除 ${ids.length} 条`)
+      setSelectedIds([])
+      await loadJobs()
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : '彻底删除失败')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  const exportJobs = async () => {
+    if (exporting) return
+    setExporting(true)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/jobs/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          format: 'xlsx',
+          scope: selectedIds.length ? 'selected' : 'all',
+          job_ids: selectedIds,
+          filters: {},
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || '导出失败')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `jobhunter_pro-jobs-${new Date().toISOString().slice(0, 10)}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      showFeedback('success', selectedIds.length ? `已导出选中的 ${selectedIds.length} 条` : '已导出全部岗位')
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : '导出失败')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const startScoring = async (options: {
+    scope: 'pending' | 'failed' | 'selected' | 'all_scored'
+    limit: number | null
+    job_ids: string[]
+    force_rescore: boolean
+  }): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      const res = await fetch('/api/scoring/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ options }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) return { ok: false, error: data.error || '启动评分失败' }
+      showFeedback('success', '评分任务已启动，进度请到「工作台」查看')
+      await loadJobs()
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : '启动评分失败' }
     }
   }
 
@@ -335,6 +477,102 @@ export default function LibraryPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardContent className="flex flex-wrap items-center gap-2 p-3">
+          <div className="flex rounded-xl border border-card-border bg-surface p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('jobs')
+                setSelectedIds([])
+              }}
+              className={cn(
+                'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                viewMode === 'jobs' ? 'bg-secondary text-primary font-black' : 'text-muted hover:text-foreground',
+              )}
+            >
+              岗位列表
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('recycle')
+                setSelectedIds([])
+              }}
+              className={cn(
+                'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                viewMode === 'recycle' ? 'bg-secondary text-primary font-black' : 'text-muted hover:text-foreground',
+              )}
+            >
+              <Archive className="mr-1 inline h-3.5 w-3.5" />
+              回收站
+            </button>
+          </div>
+          {viewMode === 'jobs' && (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void exportJobs()}
+                disabled={exporting || loading}
+              >
+                {exporting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1.5 h-3.5 w-3.5" />}
+                {selectedIds.length ? `导出选中(${selectedIds.length})` : '导出全部'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setScoreDialogOpen(true)}
+                disabled={loading}
+              >
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                批量评分
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void softDeleteJobs(selectedIds)}
+                disabled={!selectedIds.length || batchProcessing}
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                移入回收站{selectedIds.length ? `(${selectedIds.length})` : ''}
+              </Button>
+            </>
+          )}
+          {viewMode === 'recycle' && (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void restoreJobs(selectedIds)}
+                disabled={!selectedIds.length || batchProcessing}
+              >
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                恢复{selectedIds.length ? `(${selectedIds.length})` : ''}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void permanentDeleteJobs(selectedIds)}
+                disabled={!selectedIds.length || batchProcessing}
+                className="text-danger hover:text-danger"
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                彻底删除{selectedIds.length ? `(${selectedIds.length})` : ''}
+              </Button>
+            </>
+          )}
+          {viewMode === 'recycle' && (
+            <span className="ml-auto text-xs text-muted">回收站中的岗位不会参与评分、发送与统计</span>
+          )}
+        </CardContent>
+      </Card>
+
       {feedback && (
         <div
           className={cn(
@@ -366,6 +604,7 @@ export default function LibraryPage() {
               type="button"
               size="sm"
               variant="secondary"
+              className={viewMode === 'recycle' ? 'hidden' : ''}
               onClick={() => void batchProcess()}
               disabled={!selectedIds.length || batchProcessing || processingIds.length > 0}
             >
@@ -434,6 +673,70 @@ export default function LibraryPage() {
                 )}
                 {jobs.map((job) => {
                   const processing = processingIds.includes(job.id)
+                  if (viewMode === 'recycle') {
+                    return (
+                      <tr
+                        key={job.id}
+                        className="border-b border-card-border transition-colors last:border-0 hover:bg-surface/50"
+                      >
+                        <td className="px-3 py-3 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(job.id)}
+                            onChange={() => toggleSelected(job.id)}
+                            disabled={batchProcessing}
+                            aria-label={`选择岗位：${job.title || job.id}`}
+                            className="h-3.5 w-3.5 cursor-pointer rounded border-card-border accent-primary disabled:cursor-not-allowed"
+                          />
+                        </td>
+                        <td className="max-w-[18rem] truncate px-3 py-3 font-semibold text-foreground" title={job.title}>
+                          {job.title || '未命名岗位'}
+                        </td>
+                        <td className="max-w-[12rem] truncate px-3 py-3 text-xs text-muted">{job.company || '—'}</td>
+                        <td className="whitespace-nowrap px-3 py-3">
+                          <span
+                            className={cn(
+                              'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+                              isManualJob(job)
+                                ? 'border-cyan-border bg-cyan-soft text-cyan'
+                                : 'border-card-border bg-surface-muted text-muted',
+                            )}
+                          >
+                            {sourceLabel(job)}
+                          </span>
+                        </td>
+                        <td className="max-w-[16rem] truncate px-3 py-3 text-xs text-muted" title={job.deleted_reason || ''}>
+                          {job.deleted_reason || '—'}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3 text-xs text-muted">{job.deleted_at || ''}</td>
+                        <td className="whitespace-nowrap px-3 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => void restoreJobs([job.id])}
+                              disabled={batchProcessing}
+                            >
+                              <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                              恢复
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="text-danger hover:text-danger"
+                              onClick={() => void permanentDeleteJobs([job.id])}
+                              disabled={batchProcessing}
+                            >
+                              <Trash2 className="mr-1 h-3.5 w-3.5" />
+                              彻底删除
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  }
                   return (
                     <tr
                       key={job.id}
@@ -560,6 +863,13 @@ export default function LibraryPage() {
         jobId={detailJobId}
         onClose={() => setDetailJobId(null)}
         onChanged={() => void loadJobs()}
+        onSoftDelete={() => void softDeleteJobs(detailJobId ? [detailJobId] : [])}
+      />
+      <ScoreJobsDialog
+        open={scoreDialogOpen}
+        selectedJobIds={selectedIds}
+        onClose={() => setScoreDialogOpen(false)}
+        onStart={startScoring}
       />
     </div>
   )

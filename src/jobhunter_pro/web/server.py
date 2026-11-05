@@ -3526,12 +3526,15 @@ def api_library_jobs():
 		role = (request.query.get("role") or "").strip()
 		status = (request.query.get("status") or "").strip()
 		keyword = (request.query.get("keyword") or "").strip()
+		deleted = (request.query.get("deleted") or "active").strip()
 		min_score = request.query.get("min_score")
+		if deleted not in {"active", "only", "all"}:
+			return _json_response({"error": "deleted 参数无效"}, 400)
 		limit = _integer_param("limit", 100, minimum=1, maximum=500)
 		rows = list_library_jobs(
 			db, source=source or None, role=role or None, status=status or None,
 			min_score=float(min_score) if min_score else None,
-			keyword=keyword or None, limit=limit,
+			keyword=keyword or None, deleted=deleted, limit=limit,
 		)
 		return _json_response([dict(r) for r in rows])
 	finally:

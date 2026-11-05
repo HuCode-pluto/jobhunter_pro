@@ -60,14 +60,20 @@ def get_library_job(conn: sqlite3.Connection, job_id: str):
 
 def list_library_jobs(
     conn: sqlite3.Connection,
-    source=None, role=None, status=None, min_score=None, keyword=None, limit=100,
+    source=None, role=None, status=None, min_score=None, keyword=None,
+    deleted="active", limit=100,
 ):
     """统一岗位库列表：手动 + 采集岗位合并视图。
 
     source: 'manual'(手动粘贴)/'collected'(平台采集)/None(全部)；
-    keyword 匹配标题/公司；status 只过滤手动流水线状态。
+    keyword 匹配标题/公司；status 只过滤手动流水线状态；
+    deleted: 'active' 正常岗位 / 'only' 仅回收站 / 'all' 全部。
     """
     sql, args = "SELECT * FROM jobs WHERE 1=1", []
+    if deleted == "active":
+        sql += " AND deleted_at IS NULL"
+    elif deleted == "only":
+        sql += " AND deleted_at IS NOT NULL"
     if source == "manual":
         sql += " AND source_platform = 'manual'"
     elif source == "collected":

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Check,
   Copy,
+  Trash2,
   ExternalLink,
   FileDown,
   FileText,
@@ -91,6 +92,7 @@ interface JobDetailModalProps {
   jobId: string | null
   onClose: () => void
   onChanged?: () => void
+  onSoftDelete?: () => void
 }
 
 type Feedback = { type: 'success' | 'error'; text: string }
@@ -257,7 +259,7 @@ function MaterialView({ text, copied, onCopy }: { text: string; copied: boolean;
   )
 }
 
-export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailModalProps) {
+export function JobDetailModal({ open, jobId, onClose, onChanged, onSoftDelete }: JobDetailModalProps) {
   const [job, setJob] = useState<LibraryJobDetail | null>(null)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState('')
@@ -270,6 +272,10 @@ export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailMod
   const [copiedKey, setCopiedKey] = useState('')
   const [prepResult, setPrepResult] = useState<{ content: string; path: string; cached: boolean } | null>(null)
   const [pdfPath, setPdfPath] = useState('')
+  const [greetingDraft, setGreetingDraft] = useState('')
+  const [greetingBusy, setGreetingBusy] = useState(false)
+  const [traceData, setTraceData] = useState<{ state: string; trace?: Record<string, unknown> } | null>(null)
+  const [traceBusy, setTraceBusy] = useState(false)
   const copyTimer = useRef<number | null>(null)
   const feedbackTimer = useRef<number | null>(null)
 
@@ -289,6 +295,8 @@ export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailMod
       if (!res.ok) throw new Error(data.error || '加载岗位详情失败')
       const detail = data as LibraryJobDetail
       setJob(detail)
+      setGreetingDraft(detail.greeting || '')
+      setTraceData(null)
       setRoleDraft(detail.role_type || '')
       setAppStatus(detail.application?.status || '')
       setJobStatus(detail.status || 'new')
@@ -391,6 +399,54 @@ export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailMod
     } finally {
       setBusy(null)
     }
+  }
+
+  const saveGreeting = async () => {
+    if (jobId == null || greetingBusy) return
+    const text = greetingDraft.trim()
+    if (!text) {
+      setFeedback({ type: 'error', text: '招呼语不能为空' })
+      return
+    }
+    setGreetingBusy(true)
+    setFeedback(null)
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/greeting`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ greeting: text, confirmed: true }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '保存招呼语失败')
+      setFeedback({ type: 'success', text: '招呼语已保存' })
+      onChanged?.()
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : '保存招呼语失败' })
+    } finally {
+      setGreetingBusy(false)
+    }
+  }
+
+  const loadScoreTrace = async () => {
+    if (jobId == null || traceBusy) return
+    setTraceBusy(true)
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/score-trace`, { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '读取评分详情失败')
+      setTraceData(data)
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : '读取评分详情失败' })
+    } finally {
+      setTraceBusy(false)
+    }
+  }
+
+  const moveToRecycle = () => {
+    if (jobId == null) return
+    if (!window.confirm(`确定把「${job?.title || jobId}」移入回收站吗？`)) return
+    onSoftDelete?.()
+    onClose()
   }
 
   const saveRole = async () => {
@@ -784,7 +840,55 @@ export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailMod
               {!job.application && (
                 <span className="text-[11px] text-muted">定制材料生成后会创建投递记录</span>
               )}
+              {!isManualDetail(job) && (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void loadScoreTrace()}
+                    disabled={traceBusy || busy !== null}
+                  >
+                    {traceBusy ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="mr-1.5 h-4 w-4" />
+                    )}
+                    评分详情
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="ml-auto text-danger hover:text-danger"
+                    onClick={moveToRecycle}
+                    disabled={busy !== null}
+                  >
+                    <Trash2 className="mr-1.5 h-4 w-4" />
+                    移入回收站
+                  </Button>
+                </>
+              )}
             </div>
+
+            {traceData && (
+              <div className="rounded-xl border border-card-border bg-surface p-3">
+                <p className="text-xs font-semibold text-foreground">
+                  评分详情{traceData.state === 'available' ? '' : `（${traceData.state}）`}
+                </p>
+                {traceData.trace ? (
+                  <pre className="mt-2 max-h-72 overflow-y-auto whitespace-pre-wrap break-words rounded-lg border border-card-border bg-card p-3 text-[11px] leading-5 text-foreground">
+                    {JSON.stringify(traceData.trace, null, 2)}
+                  </pre>
+                ) : (
+                  <p className="mt-1 text-[11px] leading-5 text-muted">
+                    {traceData.state === 'unavailable'
+                      ? '该岗位没有可展示的评分明细（可能为关键词预筛或旧版评分）。'
+                      : '暂无评分明细。'}
+                  </p>
+                )}
+              </div>
+            )}
 
             {prepResult && (
               <div className="rounded-xl border border-card-border bg-surface p-3">
@@ -850,11 +954,53 @@ export function JobDetailModal({ open, jobId, onClose, onChanged }: JobDetailMod
                 {
                   key: 'greeting',
                   label: '打招呼语',
-                  content: (
+                  content: !isManualDetail(job) ? (
+                    <div className="space-y-3">
+                      <p className="text-[11px] leading-5 text-muted">
+                        采集岗位的招呼语：可直接编辑保存(发送前人工确认仍由「工作台」把关)。
+                      </p>
+                      <Textarea
+                        value={greetingDraft}
+                        onChange={(e) => setGreetingDraft(e.target.value)}
+                        rows={5}
+                        maxLength={300}
+                        placeholder="暂无招呼语：可到「工作台 → 确认待发」先生成，或在这里手写"
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => void saveGreeting()}
+                          disabled={greetingBusy || !greetingDraft.trim()}
+                        >
+                          {greetingBusy ? (
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Check className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          保存招呼语
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => void copyText('greeting', greetingDraft)}
+                          disabled={!greetingDraft}
+                        >
+                          {copiedKey === 'greeting' ? (
+                            <Check className="mr-1.5 h-3.5 w-3.5 text-success" />
+                          ) : (
+                            <Copy className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          {copiedKey === 'greeting' ? '已复制' : '复制'}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
                     <MaterialView
-                      text={job.greeting_file || job.greeting}
+                      text={job.greeting_file}
                       copied={copiedKey === 'greeting'}
-                      onCopy={() => void copyText('greeting', job.greeting_file || job.greeting)}
+                      onCopy={() => void copyText('greeting', job.greeting_file)}
                     />
                   ),
                 },

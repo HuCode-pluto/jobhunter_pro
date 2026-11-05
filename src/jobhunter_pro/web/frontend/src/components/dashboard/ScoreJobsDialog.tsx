@@ -33,12 +33,22 @@ interface ScoringRun {
 const scopeLabels: Record<ScoreScope, string> = {
   pending: '未评分 / 失败',
   failed: '只重试失败',
-  selected: '岗位池已选',
+  selected: '选中岗位(重新评分)',
   all_scored: '重新评分全部有效评分岗位',
 }
 
 export function ScoreJobsDialog({ open, selectedJobIds, onClose, onStart }: ScoreJobsDialogProps) {
   const [scope, setScope] = useState<ScoreScope>('pending')
+  const lastSelectedRef = useRef(selectedJobIds.join(','))
+  useEffect(() => {
+    // 打开弹窗时:有选中岗位 → 默认「选中岗位重评」;无 → 保持上次选择
+    if (!open) return
+    const key = selectedJobIds.join(',')
+    if (key && key !== lastSelectedRef.current) {
+      setScope('selected')
+    }
+    lastSelectedRef.current = key
+  }, [open, selectedJobIds])
   const [limitText, setLimitText] = useState('全部')
   const [preview, setPreview] = useState<ScorePreview | null>(null)
   const [runs, setRuns] = useState<ScoringRun[]>([])
@@ -67,7 +77,7 @@ export function ScoreJobsDialog({ open, selectedJobIds, onClose, onStart }: Scor
     setLoading(true)
     setMessage('')
     try {
-      const forceRescore = scope === 'all_scored'
+      const forceRescore = scope === 'all_scored' || scope === 'selected'
       const jobIds = scope === 'selected' ? selectedJobIds : []
       const res = await fetch('/api/scoring/preview', {
         method: 'POST',
@@ -137,7 +147,12 @@ export function ScoreJobsDialog({ open, selectedJobIds, onClose, onStart }: Scor
     setLoading(true)
     setMessage('')
     try {
-      const result = await onStart({ scope, limit, job_ids: scope === 'selected' ? selectedJobIds : [], force_rescore: scope === 'all_scored' })
+      const result = await onStart({
+        scope,
+        limit,
+        job_ids: scope === 'selected' ? selectedJobIds : [],
+        force_rescore: scope === 'all_scored' || scope === 'selected',
+      })
       if (result.ok) {
         onClose()
         return

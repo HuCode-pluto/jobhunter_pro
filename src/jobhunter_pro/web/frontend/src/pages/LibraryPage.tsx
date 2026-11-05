@@ -12,6 +12,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { ScoreJobsDialog } from '@/components/dashboard/ScoreJobsDialog'
+import { OutsourcingBadge } from '@/components/jobs/OutsourcingBadge'
 import { AddJobDialog } from '@/components/library/AddJobDialog'
 import { JobDetailModal } from '@/components/library/JobDetailModal'
 import { Button } from '@/components/ui/button'
@@ -23,7 +24,7 @@ import {
   LIBRARY_JOB_STATUS_LABELS,
   libraryStatusClass,
 } from '@/lib/libraryStatus'
-import { getStatusLabel } from '@/lib/status'
+import { getStatusLabel, STATUS_LABELS } from '@/lib/status'
 import { cn } from '@/lib/utils'
 
 export interface LibraryJob {
@@ -51,6 +52,8 @@ export interface LibraryJob {
   created_at: string
   deleted_at: string | null
   deleted_reason: string | null
+  outsourcing_level?: string
+  outsourcing_matches?: string[]
 }
 
 type Feedback = { type: 'success' | 'error'; text: string }
@@ -118,6 +121,12 @@ export default function LibraryPage() {
   const [viewMode, setViewMode] = useState<'jobs' | 'recycle'>('jobs')
   const [scoreDialogOpen, setScoreDialogOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [sortBy, setSortBy] = useState<'score' | 'created'>('score')
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
+  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv'>('xlsx')
+  const [batchStatus, setBatchStatus] = useState('')
   const feedbackTimer = useRef<number | null>(null)
   const requestRevision = useRef(0)
 
@@ -155,7 +164,10 @@ export default function LibraryPage() {
         params.set('min_score', String(parsed))
       }
     }
-    params.set('limit', '200')
+    params.set('sort', sortBy)
+    params.set('order', sortOrder)
+    params.set('limit', '100')
+    params.set('offset', String(page * 100))
     try {
       const res = await fetch(`/api/library/jobs?${params.toString()}`, { cache: 'no-store' })
       const data = await res.json().catch(() => ({}))
@@ -163,6 +175,8 @@ export default function LibraryPage() {
       if (revision !== requestRevision.current) return
       const list = Array.isArray(data) ? (data as LibraryJob[]) : []
       setJobs(list)
+      const totalHeader = res.headers.get('X-Total-Count')
+      if (totalHeader != null) setTotal(Number(totalHeader) || 0)
       setSelectedIds((prev) => prev.filter((id) => list.some((job) => job.id === id)))
     } catch (err) {
       if (revision !== requestRevision.current) return
@@ -175,6 +189,7 @@ export default function LibraryPage() {
   }
 
   const refresh = () => {
+    setPage(0)
     const rawMinScore = minScore.trim()
     if (rawMinScore !== '') {
       const parsed = Number(rawMinScore)
@@ -202,6 +217,12 @@ export default function LibraryPage() {
   useEffect(() => {
     void loadJobs()
   }, [viewMode])
+
+  // 排序/分页变化自动重载
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    void loadJobs()
+  }, [sortBy, sortOrder, page])
 
   const processJob = async (job: LibraryJob) => {
     if (processingIds.includes(job.id) || batchProcessing) return
@@ -330,7 +351,7 @@ export default function LibraryPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          format: 'xlsx',
+          format: exportFormat,
           scope: selectedIds.length ? 'selected' : 'all',
           job_ids: selectedIds,
           filters: {},
@@ -344,7 +365,7 @@ export default function LibraryPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `jobhunter_pro-jobs-${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.download = `jobhunter_pro-jobs-${new Date().toISOString().slice(0, 10)}.${exportFormat}`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -354,6 +375,52 @@ export default function LibraryPage() {
       showFeedback('error', err instanceof Error ? err.message : '导出失败')
     } finally {
       setExporting(false)
+    }
+  }
+
+  const batchSetStatus = async (target: string) => {
+    if (!selectedIds.length || batchProcessing) return
+    setBatchProcessing(true)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/jobs/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: selectedIds, status: target }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '批量状态修改失败')
+      showFeedback('success', `已更新 ${selectedIds.length} 条岗位状态`)
+      setSelectedIds([])
+      await loadJobs()
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : '批量状态修改失败')
+    } finally {
+      setBatchProcessing(false)
+      setBatchStatus('')
+    }
+  }
+
+  const markManuallySent = async () => {
+    if (!selectedIds.length || batchProcessing) return
+    if (!window.confirm(`确定把选中的 ${selectedIds.length} 条标记为已投递吗？`)) return
+    setBatchProcessing(true)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/jobs/manual-sent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: selectedIds, confirmed: true }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '标记已投失败')
+      showFeedback('success', `已标记 ${selectedIds.length} 条为已投递`)
+      setSelectedIds([])
+      await loadJobs()
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : '标记已投失败')
+    } finally {
+      setBatchProcessing(false)
     }
   }
 
@@ -443,15 +510,24 @@ export default function LibraryPage() {
           <Select
             value={status}
             onChange={(e) => setStatus(e.target.value)}
-            className="w-36"
+            className="w-40"
             aria-label="状态筛选"
           >
             <option value="">全部状态</option>
-            {LIBRARY_JOB_STATUSES.map((item) => (
+            {(source === 'collected' ? [] : LIBRARY_JOB_STATUSES).map((item) => (
               <option key={item} value={item}>
-                {LIBRARY_JOB_STATUS_LABELS[item]}
+                手动·{LIBRARY_JOB_STATUS_LABELS[item]}
               </option>
             ))}
+            {source !== 'manual' && (
+              <optgroup label="采集状态">
+                {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </Select>
           <Input
             value={minScore}
@@ -529,6 +605,52 @@ export default function LibraryPage() {
               >
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                 批量评分
+              </Button>
+              <Select
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value as 'xlsx' | 'csv')}
+                className="w-20"
+                aria-label="导出格式"
+              >
+                <option value="xlsx">xlsx</option>
+                <option value="csv">csv</option>
+              </Select>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setScoreDialogOpen(true)}
+                disabled={loading}
+              >
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                批量评分
+              </Button>
+              <Select
+                value={batchStatus}
+                onChange={(e) => {
+                  const value = e.target.value
+                  setBatchStatus(value)
+                  if (!value) return
+                  void batchSetStatus(value)
+                }}
+                className="w-32"
+                aria-label="批量状态"
+                disabled={!selectedIds.length || batchProcessing}
+              >
+                <option value="">批量状态…</option>
+                <option value="ready">待确认</option>
+                <option value="filtered">已过滤</option>
+                <option value="skipped">已跳过</option>
+                <option value="rejected">已拒绝</option>
+              </Select>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void markManuallySent()}
+                disabled={!selectedIds.length || batchProcessing}
+              >
+                标记已投{selectedIds.length ? `(${selectedIds.length})` : ''}
               </Button>
               <Button
                 type="button"
@@ -638,8 +760,33 @@ export default function LibraryPage() {
                   <th className="px-3 py-3 text-left font-bold">薪资</th>
                   <th className="px-3 py-3 text-left font-bold">来源</th>
                   <th className="px-3 py-3 text-left font-bold">方向</th>
-                  <th className="px-3 py-3 text-left font-bold">评分</th>
+                  <th className="px-3 py-3 text-left font-bold">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 hover:text-primary"
+                      onClick={() => {
+                        if (sortBy === 'score') setSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'))
+                        else setSortBy('score')
+                      }}
+                    >
+                      评分
+                      {sortBy === 'score' && (sortOrder === 'desc' ? ' ↓' : ' ↑')}
+                    </button>
+                  </th>
                   <th className="px-3 py-3 text-left font-bold">状态</th>
+                  <th className="px-3 py-3 text-left font-bold">
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1 hover:text-primary"
+                      onClick={() => {
+                        if (sortBy === 'created') setSortOrder((o) => (o === 'desc' ? 'asc' : 'desc'))
+                        else setSortBy('created')
+                      }}
+                    >
+                      时间
+                      {sortBy === 'created' && (sortOrder === 'desc' ? ' ↓' : ' ↑')}
+                    </button>
+                  </th>
                   <th className="px-3 py-3 text-left font-bold">操作</th>
                 </tr>
               </thead>
@@ -762,6 +909,7 @@ export default function LibraryPage() {
                           >
                             {job.title || '未命名岗位'}
                           </button>
+                          <OutsourcingBadge job={job as never} />
                           {isHttpUrl(job.url) && (
                             <a
                               href={job.url}
@@ -851,6 +999,39 @@ export default function LibraryPage() {
             </table>
           </div>
         </CardContent>
+        {(total > 100 || page > 0) && (
+          <div className="flex items-center justify-between border-t border-card-border px-5 py-3">
+            <span className="text-xs text-muted">
+              共 {total} 条 · 第 {page + 1}/{Math.max(1, Math.ceil(total / 100))} 页
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setPage((p) => Math.max(0, p - 1))
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+                disabled={page === 0 || loading}
+              >
+                上一页
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setPage((p) => p + 1)
+                  window.scrollTo({ top: 0, behavior: 'smooth' })
+                }}
+                disabled={(page + 1) * 100 >= total || loading}
+              >
+                下一页
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       <AddJobDialog

@@ -65,11 +65,18 @@ class ManualDbTests(unittest.TestCase):
             "source_platform": "boss", "title": "采集开发岗", "company": "B 公司",
             "jd": "x", "status": "pending", "score": 60,
         })
-        self.assertEqual(len(mdb.list_library_jobs(self.db)), 2)
-        self.assertEqual(len(mdb.list_library_jobs(self.db, source="manual")), 1)
-        self.assertEqual(len(mdb.list_library_jobs(self.db, source="collected")), 1)
-        self.assertEqual(len(mdb.list_library_jobs(self.db, keyword="运维")), 1)
-        self.assertEqual(len(mdb.list_library_jobs(self.db, min_score=70)), 1)
+        rows, total = mdb.list_library_jobs(self.db)
+        self.assertEqual(total, 2)
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(mdb.list_library_jobs(self.db, source="manual")[1], 1)
+        self.assertEqual(mdb.list_library_jobs(self.db, source="collected")[1], 1)
+        self.assertEqual(mdb.list_library_jobs(self.db, keyword="运维")[1], 1)
+        self.assertEqual(mdb.list_library_jobs(self.db, min_score=70)[1], 1)
+        # 排序:评分降序默认,created 排序可选
+        by_score = mdb.list_library_jobs(self.db, sort="score")[0]
+        self.assertEqual(by_score[0]["score"], 75)
+        by_created = mdb.list_library_jobs(self.db, sort="created", order="asc")[0]
+        self.assertEqual({r["title"] for r in by_created}, {"手动运维岗", "采集开发岗"})
 
     def test_application_ledger_text_id(self):
         job_id = mdb.insert_library_job(self.db, {"title": "t", "company": "c"})

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  Ban,
   Check,
   Copy,
   Trash2,
@@ -11,6 +12,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { Dialog } from '@/components/ui/dialog'
+import type { Job } from '@/hooks/useDashboard'
 import { Tabs } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,6 +20,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { copyToClipboard } from '@/lib/clipboard'
 import { getStatusLabel } from '@/lib/status'
+import { InterviewPreparation } from '@/components/jobs/InterviewPreparation'
+import { OutsourcingBadge } from '@/components/jobs/OutsourcingBadge'
 import {
   APPLICATION_STATUS_LABELS,
   LIBRARY_JOB_STATUSES,
@@ -85,6 +89,11 @@ export interface LibraryJobDetail {
   greeting_file: string
   cover_letter_file: string
   resume_file: string
+  greeting_original: string
+  greeting_optimized: string
+  greeting_selection: string
+  outsourcing_level?: string
+  outsourcing_matches?: string[]
 }
 
 interface JobDetailModalProps {
@@ -274,8 +283,10 @@ export function JobDetailModal({ open, jobId, onClose, onChanged, onSoftDelete }
   const [pdfPath, setPdfPath] = useState('')
   const [greetingDraft, setGreetingDraft] = useState('')
   const [greetingBusy, setGreetingBusy] = useState(false)
+  const [greetingPick, setGreetingPick] = useState<'edited' | 'original' | 'optimized'>('edited')
   const [traceData, setTraceData] = useState<{ state: string; trace?: Record<string, unknown> } | null>(null)
   const [traceBusy, setTraceBusy] = useState(false)
+  const [blockBusy, setBlockBusy] = useState(false)
   const copyTimer = useRef<number | null>(null)
   const feedbackTimer = useRef<number | null>(null)
 
@@ -404,17 +415,24 @@ export function JobDetailModal({ open, jobId, onClose, onChanged, onSoftDelete }
   const saveGreeting = async () => {
     if (jobId == null || greetingBusy) return
     const text = greetingDraft.trim()
-    if (!text) {
+    if (greetingPick === 'edited' && !text) {
       setFeedback({ type: 'error', text: '招呼语不能为空' })
       return
     }
     setGreetingBusy(true)
     setFeedback(null)
     try {
-      const res = await fetch(`/api/jobs/${jobId}/greeting`, {
+      // 有原文/优化版时走 greeting-selection(锁定版本);否则直接编辑保存
+      let url = `/api/jobs/${jobId}/greeting`
+      let body: Record<string, unknown> = { greeting: text, confirmed: true }
+      if (job?.greeting_original || job?.greeting_optimized) {
+        url = `/api/jobs/${jobId}/greeting-selection`
+        body = { selection: greetingPick, greeting: text, confirmed: true }
+      }
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ greeting: text, confirmed: true }),
+        body: JSON.stringify(body),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.error || '保存招呼语失败')
@@ -439,6 +457,42 @@ export function JobDetailModal({ open, jobId, onClose, onChanged, onSoftDelete }
       setFeedback({ type: 'error', text: err instanceof Error ? err.message : '读取评分详情失败' })
     } finally {
       setTraceBusy(false)
+    }
+  }
+
+  const blockCompany = async () => {
+    if (jobId == null || blockBusy) return
+    const company = job?.company?.trim()
+    if (!company) {
+      setFeedback({ type: 'error', text: '该岗位没有公司信息' })
+      return
+    }
+    if (!window.confirm(`屏蔽「${company}」？列表中所有该公司的岗位将不再显示。`)) return
+    setBlockBusy(true)
+    try {
+      const res = await fetch('/api/config', { cache: 'no-store' })
+      const config = await res.json().catch(() => ({}))
+      const current: string[] = Array.isArray(config.profile?.blocked_companies)
+        ? config.profile.blocked_companies
+        : []
+      if (current.includes(company)) {
+        setFeedback({ type: 'success', text: `「${company}」已在屏蔽列表中` })
+        return
+      }
+      const saveRes = await fetch('/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile: { blocked_companies: [...current, company] } }),
+      })
+      const saveData = await saveRes.json().catch(() => ({}))
+      if (!saveRes.ok) throw new Error(saveData.error || '屏蔽公司失败')
+      window.dispatchEvent(new Event('jobhunter-pro-config-saved'))
+      setFeedback({ type: 'success', text: `已屏蔽「${company}」，刷新列表后生效` })
+      onChanged?.()
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : '屏蔽公司失败' })
+    } finally {
+      setBlockBusy(false)
     }
   }
 
@@ -796,9 +850,16 @@ export function JobDetailModal({ open, jobId, onClose, onChanged, onSoftDelete }
                       {job.score == null || job.score === 0 ? '—' : job.score}
                     </div>
                   </div>
+                  <OutsourcingBadge job={job as never} />
                 </div>
               </div>
             </div>
+
+            {!isManualDetail(job) && (
+              <div className="rounded-xl border border-card-border bg-surface p-3">
+                <InterviewPreparation job={job as unknown as Job} />
+              </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               <Button type="button" size="sm" onClick={() => void runProcess()} disabled={busy !== null}>
@@ -855,6 +916,21 @@ export function JobDetailModal({ open, jobId, onClose, onChanged, onSoftDelete }
                       <Sparkles className="mr-1.5 h-4 w-4" />
                     )}
                     评分详情
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted hover:text-foreground"
+                    onClick={() => void blockCompany()}
+                    disabled={blockBusy || busy !== null}
+                  >
+                    {blockBusy ? (
+                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Ban className="mr-1.5 h-4 w-4" />
+                    )}
+                    屏蔽该公司
                   </Button>
                   <Button
                     type="button"
@@ -957,11 +1033,64 @@ export function JobDetailModal({ open, jobId, onClose, onChanged, onSoftDelete }
                   content: !isManualDetail(job) ? (
                     <div className="space-y-3">
                       <p className="text-[11px] leading-5 text-muted">
-                        采集岗位的招呼语：可直接编辑保存(发送前人工确认仍由「工作台」把关)。
+                        采集岗位的招呼语：可选择 AI 生成版本或直接编辑(发送前人工确认仍由「工作台」把关)。
                       </p>
+                      {(job.greeting_original || job.greeting_optimized) && (
+                        <div className="flex flex-wrap gap-2">
+                          {job.greeting_original && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGreetingPick('original')
+                                setGreetingDraft(job.greeting_original)
+                              }}
+                              className={cn(
+                                'rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors',
+                                greetingPick === 'original'
+                                  ? 'border-primary bg-primary/10 text-primary'
+                                  : 'border-card-border bg-surface text-muted hover:text-foreground',
+                              )}
+                            >
+                              原文
+                            </button>
+                          )}
+                          {job.greeting_optimized && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGreetingPick('optimized')
+                                setGreetingDraft(job.greeting_optimized)
+                              }}
+                              className={cn(
+                                'rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors',
+                                greetingPick === 'optimized'
+                                  ? 'border-primary bg-primary/10 text-primary'
+                                  : 'border-card-border bg-surface text-muted hover:text-foreground',
+                              )}
+                            >
+                              AI 优化版
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setGreetingPick('edited')}
+                            className={cn(
+                              'rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors',
+                              greetingPick === 'edited'
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-card-border bg-surface text-muted hover:text-foreground',
+                            )}
+                          >
+                            手动编辑
+                          </button>
+                        </div>
+                      )}
                       <Textarea
                         value={greetingDraft}
-                        onChange={(e) => setGreetingDraft(e.target.value)}
+                        onChange={(e) => {
+                          setGreetingDraft(e.target.value)
+                          setGreetingPick('edited')
+                        }}
                         rows={5}
                         maxLength={300}
                         placeholder="暂无招呼语：可到「工作台 → 确认待发」先生成，或在这里手写"

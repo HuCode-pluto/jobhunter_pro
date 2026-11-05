@@ -61,38 +61,53 @@ def get_library_job(conn: sqlite3.Connection, job_id: str):
 def list_library_jobs(
     conn: sqlite3.Connection,
     source=None, role=None, status=None, min_score=None, keyword=None,
-    deleted="active", limit=100,
+    deleted="active", sort="score", order="desc", offset=0, limit=100,
+    blocked_companies=None,
 ):
     """统一岗位库列表：手动 + 采集岗位合并视图。
 
     source: 'manual'(手动粘贴)/'collected'(平台采集)/None(全部)；
-    keyword 匹配标题/公司；status 只过滤手动流水线状态；
-    deleted: 'active' 正常岗位 / 'only' 仅回收站 / 'all' 全部。
+    keyword 匹配标题/公司；status 过滤岗位状态(手动或 house 状态都按原值匹配)；
+    deleted: 'active' 正常岗位 / 'only' 仅回收站 / 'all' 全部；
+    sort: 'score'|'created'，order: 'desc'|'asc'。返回 (rows, total)。
     """
-    sql, args = "SELECT * FROM jobs WHERE 1=1", []
+    where, args = "WHERE 1=1", []
     if deleted == "active":
-        sql += " AND deleted_at IS NULL"
+        where += " AND deleted_at IS NULL"
     elif deleted == "only":
-        sql += " AND deleted_at IS NOT NULL"
+        where += " AND deleted_at IS NOT NULL"
     if source == "manual":
-        sql += " AND source_platform = 'manual'"
+        where += " AND source_platform = 'manual'"
     elif source == "collected":
-        sql += " AND (source_platform IS NULL OR source_platform != 'manual')"
+        where += " AND (source_platform IS NULL OR source_platform != 'manual')"
     if role:
-        sql += " AND role_type = ?"
+        where += " AND role_type = ?"
         args.append(role)
     if status:
-        sql += " AND status = ?"
+        where += " AND status = ?"
         args.append(status)
     if min_score is not None:
-        sql += " AND score >= ?"
+        where += " AND score >= ?"
         args.append(min_score)
     if keyword:
-        sql += " AND (title LIKE ? OR company LIKE ?)"
+        where += " AND (title LIKE ? OR company LIKE ?)"
         args += [f"%{keyword}%", f"%{keyword}%"]
-    sql += " ORDER BY COALESCE(score, 0) DESC, created_at DESC LIMIT ?"
-    args.append(limit)
-    return conn.execute(sql, args).fetchall()
+    total = conn.execute(f"SELECT COUNT(*) FROM jobs {where}", args).fetchone()[0]
+    order_clause = "created_at" if sort == "created" else "COALESCE(score, 0)"
+    direction = "ASC" if order == "asc" else "DESC"
+    sql = (
+        f"SELECT * FROM jobs {where} ORDER BY {order_clause} {direction}, id DESC "
+        f"LIMIT ? OFFSET ?"
+    )
+    rows = conn.execute(sql, [*args, limit, offset]).fetchall()
+    if blocked_companies:
+        from jobhunter_pro.db import matching_blocked_company
+
+        rows = [
+            row for row in rows
+            if matching_blocked_company(row["company"], blocked_companies) is None
+        ]
+    return rows, total
 
 
 def update_library_job(conn: sqlite3.Connection, job_id: str, **fields):

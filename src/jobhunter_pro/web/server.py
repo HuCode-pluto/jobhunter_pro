@@ -3527,16 +3527,25 @@ def api_library_jobs():
 		status = (request.query.get("status") or "").strip()
 		keyword = (request.query.get("keyword") or "").strip()
 		deleted = (request.query.get("deleted") or "active").strip()
+		sort = (request.query.get("sort") or "score").strip()
+		order = (request.query.get("order") or "desc").strip()
 		min_score = request.query.get("min_score")
 		if deleted not in {"active", "only", "all"}:
 			return _json_response({"error": "deleted 参数无效"}, 400)
+		if sort not in {"score", "created"} or order not in {"desc", "asc"}:
+			return _json_response({"error": "排序参数无效"}, 400)
 		limit = _integer_param("limit", 100, minimum=1, maximum=500)
-		rows = list_library_jobs(
+		offset = _integer_param("offset", 0, minimum=0, maximum=100000)
+		blocked = load_config(CONFIG_PATH).get("profile", {}).get("blocked_companies", [])
+		rows, total = list_library_jobs(
 			db, source=source or None, role=role or None, status=status or None,
 			min_score=float(min_score) if min_score else None,
-			keyword=keyword or None, deleted=deleted, limit=limit,
+			keyword=keyword or None, deleted=deleted,
+			sort=sort, order=order, offset=offset, limit=limit,
+			blocked_companies=blocked,
 		)
-		return _json_response([dict(r) for r in rows])
+		response.headers["X-Total-Count"] = str(total)
+		return _json_response([serialize_job(dict(r)) for r in rows])
 	finally:
 		db.close()
 

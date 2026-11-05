@@ -8,6 +8,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Send,
   Sparkles,
   Trash2,
 } from 'lucide-react'
@@ -118,7 +119,7 @@ export default function LibraryPage() {
   const [detailJobId, setDetailJobId] = useState<string | null>(null)
   const [processingIds, setProcessingIds] = useState<string[]>([])
   const [batchProcessing, setBatchProcessing] = useState(false)
-  const [viewMode, setViewMode] = useState<'jobs' | 'recycle'>('jobs')
+  const [viewMode, setViewMode] = useState<'jobs' | 'recycle' | 'pending'>('jobs')
   const [scoreDialogOpen, setScoreDialogOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [sortBy, setSortBy] = useState<'score' | 'created'>('score')
@@ -127,6 +128,16 @@ export default function LibraryPage() {
   const [total, setTotal] = useState(0)
   const [exportFormat, setExportFormat] = useState<'xlsx' | 'csv'>('xlsx')
   const [batchStatus, setBatchStatus] = useState('')
+  const [createdWithin, setCreatedWithin] = useState('')
+  const [salaryMin, setSalaryMin] = useState('')
+  const [salaryMax, setSalaryMax] = useState('')
+  const [education, setEducation] = useState('')
+  const [recType, setRecType] = useState('')
+  const [city, setCity] = useState('')
+  const [pendingJobs, setPendingJobs] = useState<Array<Record<string, unknown>>>([])
+  const [pendingLoading, setPendingLoading] = useState(false)
+  const [quota, setQuota] = useState<{ remaining: number; daily_limit: number } | null>(null)
+  const [pendingBusy, setPendingBusy] = useState(false)
   const feedbackTimer = useRef<number | null>(null)
   const requestRevision = useRef(0)
 
@@ -164,6 +175,16 @@ export default function LibraryPage() {
         params.set('min_score', String(parsed))
       }
     }
+    if (createdWithin) params.set('created_within', createdWithin)
+    if (salaryMin.trim() && Number.isFinite(Number(salaryMin))) {
+      params.set('salary_min', String(Number(salaryMin) * 1000))
+    }
+    if (salaryMax.trim() && Number.isFinite(Number(salaryMax))) {
+      params.set('salary_max', String(Number(salaryMax) * 1000))
+    }
+    if (education) params.set('education', education)
+    if (recType) params.set('recruitment_type', recType)
+    if (city.trim()) params.set('city', city.trim())
     params.set('sort', sortBy)
     params.set('order', sortOrder)
     params.set('limit', '100')
@@ -242,38 +263,6 @@ export default function LibraryPage() {
       showFeedback('error', err instanceof Error ? err.message : '处理失败')
     } finally {
       setProcessingIds((prev) => prev.filter((id) => id !== job.id))
-    }
-  }
-
-  const batchProcess = async () => {
-    if (!selectedIds.length || batchProcessing) return
-    const ids = [...selectedIds]
-    setBatchProcessing(true)
-    setFeedback(null)
-    try {
-      const res = await fetch('/api/library/jobs/batch-process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || '批量处理失败')
-      const results: Array<{ id?: string; error?: string }> = Array.isArray(data.results)
-        ? (data.results as Array<{ id?: string; error?: string }>)
-        : []
-      const failedCount = results.filter((item) => item.error).length
-      const okCount =
-        typeof data.ok_count === 'number' ? data.ok_count : Math.max(results.length - failedCount, 0)
-      showFeedback(
-        failedCount ? 'error' : 'success',
-        `批量处理完成：成功 ${okCount} 条${failedCount ? `，失败 ${failedCount} 条` : ''}`,
-      )
-      setSelectedIds([])
-      await loadJobs()
-    } catch (err) {
-      showFeedback('error', err instanceof Error ? err.message : '批量处理失败')
-    } finally {
-      setBatchProcessing(false)
     }
   }
 
@@ -424,6 +413,64 @@ export default function LibraryPage() {
     }
   }
 
+  const loadPending = async () => {
+    setPendingLoading(true)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/workbench', { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '读取待确认列表失败')
+      setPendingJobs(Array.isArray(data.pending_confirmation) ? data.pending_confirmation : [])
+      if (data.send_quota) setQuota(data.send_quota)
+    } catch (err) {
+      setFeedback({ type: 'error', text: err instanceof Error ? err.message : '读取待确认列表失败' })
+    } finally {
+      setPendingLoading(false)
+    }
+  }
+
+  const deliverJobs = async (ids: string[]) => {
+    if (!ids.length || pendingBusy) return
+    setPendingBusy(true)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/workbench/deliver', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: ids, direct_send: false }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '确认发送失败')
+      showFeedback('success', `已确认 ${ids.length} 条进入发送队列，发送进度见「监测执行」`)
+      await loadPending()
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : '确认发送失败')
+    } finally {
+      setPendingBusy(false)
+    }
+  }
+
+  const rejectPendingJobs = async (ids: string[]) => {
+    if (!ids.length || pendingBusy) return
+    setPendingBusy(true)
+    setFeedback(null)
+    try {
+      const res = await fetch('/api/workbench/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_ids: ids }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '放弃失败')
+      showFeedback('success', `已放弃 ${ids.length} 条`)
+      await loadPending()
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : '放弃失败')
+    } finally {
+      setPendingBusy(false)
+    }
+  }
+
   const startScoring = async (options: {
     scope: 'pending' | 'failed' | 'selected' | 'all_scored'
     limit: number | null
@@ -542,6 +589,69 @@ export default function LibraryPage() {
             className="w-32"
             aria-label="最低评分"
           />
+          <Select
+            value={createdWithin}
+            onChange={(e) => setCreatedWithin(e.target.value)}
+            className="w-28"
+            aria-label="采集时间"
+          >
+            <option value="">采集时间：全部</option>
+            <option value="today">今天</option>
+            <option value="3d">近 3 天</option>
+            <option value="7d">近 7 天</option>
+          </Select>
+          <Input
+            value={salaryMin}
+            onChange={(e) => setSalaryMin(e.target.value)}
+            type="number"
+            min={0}
+            placeholder="最低薪资 K"
+            className="w-28"
+            aria-label="最低薪资 K"
+          />
+          <Input
+            value={salaryMax}
+            onChange={(e) => setSalaryMax(e.target.value)}
+            type="number"
+            min={0}
+            placeholder="最高薪资 K"
+            className="w-28"
+            aria-label="最高薪资 K"
+          />
+          <Select
+            value={education}
+            onChange={(e) => setEducation(e.target.value)}
+            className="w-28"
+            aria-label="学历"
+          >
+            <option value="">学历：全部</option>
+            <option value="博士">博士</option>
+            <option value="硕士">硕士</option>
+            <option value="本科">本科</option>
+            <option value="大专">大专</option>
+            <option value="不限">学历不限</option>
+          </Select>
+          <Select
+            value={recType}
+            onChange={(e) => setRecType(e.target.value)}
+            className="w-28"
+            aria-label="招聘类型"
+          >
+            <option value="">招聘类型：全部</option>
+            <option value="campus">校招</option>
+            <option value="experienced">社招</option>
+            <option value="unknown">未识别</option>
+          </Select>
+          <Input
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') refresh()
+            }}
+            placeholder="城市"
+            className="w-24"
+            aria-label="城市"
+          />
           <Button type="button" variant="secondary" onClick={refresh} disabled={loading}>
             <RefreshCw className={cn('mr-1.5 h-4 w-4', loading && 'animate-spin')} />
             刷新
@@ -568,6 +678,21 @@ export default function LibraryPage() {
               )}
             >
               岗位列表
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('pending')
+                setSelectedIds([])
+                void loadPending()
+              }}
+              className={cn(
+                'rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                viewMode === 'pending' ? 'bg-secondary text-primary font-black' : 'text-muted hover:text-foreground',
+              )}
+            >
+              待确认发送
+              {quota != null && viewMode !== 'pending' ? `(${quota.remaining})` : ''}
             </button>
             <button
               type="button"
@@ -715,28 +840,115 @@ export default function LibraryPage() {
         </div>
       )}
 
-      <Card>
+      {viewMode === 'pending' && (
+        <Card>
+          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 px-5 py-4">
+            <CardTitle>待确认发送</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              {quota && (
+                <span className={cn('text-xs', quota.remaining <= 0 ? 'text-danger' : 'text-muted')}>
+                  今日额度 {quota.remaining}/{quota.daily_limit}
+                </span>
+              )}
+              <Button type="button" size="sm" variant="secondary" onClick={() => void loadPending()} disabled={pendingLoading}>
+                {pendingLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+                刷新
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void deliverJobs(pendingJobs.map((j) => String(j.id)))}
+                disabled={!pendingJobs.length || pendingBusy}
+              >
+                {pendingBusy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Send className="mr-1.5 h-3.5 w-3.5" />}
+                全部确认发送（{pendingJobs.length}）
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-sm">
+                <thead>
+                  <tr className="border-b border-card-border bg-surface text-xs text-muted">
+                    <th className="px-3 py-3 text-left font-bold">岗位</th>
+                    <th className="px-3 py-3 text-left font-bold">公司</th>
+                    <th className="px-3 py-3 text-left font-bold">招呼语</th>
+                    <th className="px-3 py-3 text-left font-bold">评分</th>
+                    <th className="px-3 py-3 text-left font-bold">平台</th>
+                    <th className="px-3 py-3 text-left font-bold">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingJobs.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted">
+                        {pendingLoading ? '正在读取…' : '暂无待确认发送的岗位（评分达标后会自动进入这里）'}
+                      </td>
+                    </tr>
+                  )}
+                  {pendingJobs.map((job) => (
+                    <tr key={String(job.id)} className="border-b border-card-border last:border-0 hover:bg-surface/50">
+                      <td className="max-w-[16rem] truncate px-3 py-3">
+                        <button
+                          type="button"
+                          onClick={() => setDetailJobId(String(job.id))}
+                          className="max-w-full truncate text-left font-semibold text-foreground hover:text-primary"
+                          title={String(job.title || '未命名岗位')}
+                        >
+                          {String(job.title || '未命名岗位')}
+                        </button>
+                      </td>
+                      <td className="max-w-[10rem] truncate px-3 py-3 text-xs text-muted">{String(job.company || '—')}</td>
+                      <td className="max-w-[20rem] truncate px-3 py-3 text-xs text-muted" title={String(job.greeting || '')}>
+                        {String(job.greeting || '—')}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        <span className={cn('text-base font-black', scoreClass(Number(job.score) || 0))}>
+                          {Number(job.score) || 0}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3 text-xs text-muted">
+                        {String(job.source_platform || 'boss')}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void deliverJobs([String(job.id)])}
+                            disabled={pendingBusy}
+                          >
+                            确认发送
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="text-danger hover:text-danger"
+                            onClick={() => void rejectPendingJobs([String(job.id)])}
+                            disabled={pendingBusy}
+                          >
+                            放弃
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className={viewMode === 'pending' ? 'hidden' : ''}>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 px-5 py-4">
           <CardTitle>岗位列表</CardTitle>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted">
               {selectedIds.length > 0 ? `已选 ${selectedIds.length} 条` : `共 ${jobs.length} 条`}
             </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className={viewMode === 'recycle' ? 'hidden' : ''}
-              onClick={() => void batchProcess()}
-              disabled={!selectedIds.length || batchProcessing || processingIds.length > 0}
-            >
-              {batchProcessing ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              )}
-              批量处理{selectedIds.length ? `（${selectedIds.length}）` : ''}
-            </Button>
+
           </div>
         </CardHeader>
         <CardContent className="p-0">

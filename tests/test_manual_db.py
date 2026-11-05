@@ -133,3 +133,32 @@ class ManualDbTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LibraryFilterTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = get_db(Path(self.tmp.name) / "test.db")
+
+    def tearDown(self):
+        self.db.close()
+        self.tmp.cleanup()
+
+    def test_extended_filters_created_education_salary_city(self):
+        mdb.insert_library_job(self.db, {
+            "source_platform": "manual", "title": "运维岗A", "company": "A公司",
+            "jd": "x", "status": "new", "score": 60,
+            "education_required": "本科", "city": "上海",
+            "salary_min": 8000, "salary_max": 12000, "salary": "8-12K",
+        })
+        mdb.insert_library_job(self.db, {
+            "source_platform": "boss", "title": "运维岗B", "company": "B公司",
+            "jd": "x", "status": "pending", "score": 80,
+            "education": "大专", "city": "北京", "salary": "20-30K·14薪",
+            "recruitment_type": "experienced",
+        })
+        self.assertEqual(mdb.list_library_jobs(self.db, education="本科")[1], 1)
+        self.assertEqual(mdb.list_library_jobs(self.db, city="北京")[1], 1)
+        self.assertEqual(mdb.list_library_jobs(self.db, recruitment_type="experienced")[1], 1)
+        self.assertEqual(mdb.list_library_jobs(self.db, salary_min=15000)[1], 1)
+        self.assertEqual(mdb.list_library_jobs(self.db, created_within="7d")[1], 2)

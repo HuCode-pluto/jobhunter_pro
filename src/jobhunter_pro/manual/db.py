@@ -58,11 +58,30 @@ def get_library_job(conn: sqlite3.Connection, job_id: str):
     return conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
 
 
+def _salary_range_from_text(salary_text: str) -> tuple[float | None, float | None]:
+    """从薪资文本(如 '18-28K·14薪'、'3万-5万')解析月薪区间(元)。"""
+    import re
+
+    text = str(salary_text or "")
+    m = re.search(r"(\d+(?:\.\d+)?)\s*[Kk]\s*-\s*(\d+(?:\.\d+)?)\s*[Kk]", text)
+    if m:
+        return float(m.group(1)) * 1000, float(m.group(2)) * 1000
+    m = re.search(r"(\d+(?:\.\d+)?)\s*万\s*-\s*(\d+(?:\.\d+)?)\s*万", text)
+    if m:
+        return float(m.group(1)) * 10000, float(m.group(2)) * 10000
+    m = re.search(r"(\d+(?:\.\d+)?)\s*[Kk]", text)
+    if m:
+        value = float(m.group(1)) * 1000
+        return value, value
+    return None, None
+
+
 def list_library_jobs(
     conn: sqlite3.Connection,
     source=None, role=None, status=None, min_score=None, keyword=None,
     deleted="active", sort="score", order="desc", offset=0, limit=100,
-    blocked_companies=None,
+    blocked_companies=None, created_within=None, salary_min=None, salary_max=None,
+    education=None, recruitment_type=None, city=None,
 ):
     """统一岗位库列表：手动 + 采集岗位合并视图。
 
@@ -92,14 +111,48 @@ def list_library_jobs(
     if keyword:
         where += " AND (title LIKE ? OR company LIKE ?)"
         args += [f"%{keyword}%", f"%{keyword}%"]
+    if created_within in {"today", "3d", "7d"}:
+        days = {"today": 1, "3d": 3, "7d": 7}[created_within]
+        where += " AND created_at >= datetime('now', ?)"
+        args.append(f"-{days} days")
+    if education:
+        where += " AND (education LIKE ? OR education_required LIKE ?)"
+        args += [f"%{education}%", f"%{education}%"]
+    if recruitment_type:
+        where += " AND recruitment_type = ?"
+        args.append(recruitment_type)
+    if city:
+        where += " AND city LIKE ?"
+        args.append(f"%{city}%")
     total = conn.execute(f"SELECT COUNT(*) FROM jobs {where}", args).fetchone()[0]
+    rows_holder = conn.execute(
+        f"SELECT * FROM jobs {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+        [*args, limit, offset],
+    ).fetchall()
+    salary_active = salary_min is not None or salary_max is not None
+    if salary_active:
+        # 薪资区间过滤:手动岗位用 salary_min/max 列,采集岗位解析薪资文本
+        def _overlaps(row):
+            low, high = row["salary_min"], row["salary_max"]
+            if not low and not high:
+                low, high = _salary_range_from_text(row["salary"])
+            if not low and not high:
+                return True  # 薪资未知不过滤
+            if salary_min is not None and high is not None and high < salary_min:
+                return False
+            if salary_max is not None and low is not None and low > salary_max:
+                return False
+            return True
+
+        rows_holder = [row for row in rows_holder if _overlaps(row)]
+        # 薪资过滤在当前分页窗口内执行(与原岗位池前端过滤口径一致),total 同步近似
+        total = len(rows_holder)
     order_clause = "created_at" if sort == "created" else "COALESCE(score, 0)"
     direction = "ASC" if order == "asc" else "DESC"
-    sql = (
-        f"SELECT * FROM jobs {where} ORDER BY {order_clause} {direction}, id DESC "
-        f"LIMIT ? OFFSET ?"
-    )
-    rows = conn.execute(sql, [*args, limit, offset]).fetchall()
+    # 薪资区间在 Python 层过滤后,按分页窗口重新排序截断
+    rows_holder.sort(key=lambda row: row["created_at"] if sort == "created" else (row["score"] or 0),
+                     reverse=(order == "desc"))
+    rows = rows_holder
     if blocked_companies:
         from jobhunter_pro.db import matching_blocked_company
 

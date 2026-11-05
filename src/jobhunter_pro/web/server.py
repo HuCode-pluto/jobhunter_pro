@@ -3530,10 +3530,18 @@ def api_library_jobs():
 		sort = (request.query.get("sort") or "score").strip()
 		order = (request.query.get("order") or "desc").strip()
 		min_score = request.query.get("min_score")
+		created_within = (request.query.get("created_within") or "").strip()
+		salary_min = _optional_float_param("salary_min", minimum=0)
+		salary_max = _optional_float_param("salary_max", minimum=0)
+		education = (request.query.get("education") or "").strip()
+		recruitment_type = (request.query.get("recruitment_type") or "").strip()
+		city = (request.query.get("city") or "").strip()
 		if deleted not in {"active", "only", "all"}:
 			return _json_response({"error": "deleted 参数无效"}, 400)
 		if sort not in {"score", "created"} or order not in {"desc", "asc"}:
 			return _json_response({"error": "排序参数无效"}, 400)
+		if created_within not in {"", "today", "3d", "7d"}:
+			return _json_response({"error": "采集时间参数无效"}, 400)
 		limit = _integer_param("limit", 100, minimum=1, maximum=500)
 		offset = _integer_param("offset", 0, minimum=0, maximum=100000)
 		blocked = load_config(CONFIG_PATH).get("profile", {}).get("blocked_companies", [])
@@ -3542,7 +3550,10 @@ def api_library_jobs():
 			min_score=float(min_score) if min_score else None,
 			keyword=keyword or None, deleted=deleted,
 			sort=sort, order=order, offset=offset, limit=limit,
-			blocked_companies=blocked,
+			blocked_companies=blocked, created_within=created_within or None,
+			salary_min=salary_min, salary_max=salary_max,
+			education=education or None, recruitment_type=recruitment_type or None,
+			city=city or None,
 		)
 		response.headers["X-Total-Count"] = str(total)
 		return _json_response([serialize_job(dict(r)) for r in rows])

@@ -739,6 +739,50 @@ def _score_job_with_ai(
     return ScoreOutcome(result=_merge_review_results(first, review))
 
 
+def _fill_job_role(db, job: dict, config: dict) -> None:
+    """评分完成后回填岗位方向(工作内容的行业/方向),写入 jobs.role_type。
+
+    优先级:配置关键词命中 > LLM 归类(可输出真实方向标签,如"技术支持工程师")。
+    仅在 role_type 为空时执行;失败静默跳过,不影响评分主流程。
+    """
+    from jobhunter_pro.manual.jd_parser import detect_role, detect_role_llm
+
+    roles = config.get("job_preferences", {}).get("roles", [])
+    roles = [r for r in roles if isinstance(r, dict) and r.get("name")]
+    if not roles:
+        return
+    try:
+        row = db.execute("SELECT role_type FROM jobs WHERE id = ?", (job["id"],)).fetchone()
+    except Exception:
+        return
+    if not row or (row["role_type"] or "").strip():
+        return
+    minimal = {
+        "title": job.get("title", ""),
+        "company": job.get("company", ""),
+        "responsibilities": [],
+        "must_have": [],
+        "skill_points": [],
+    }
+    role_name = detect_role(minimal, roles)
+    if not role_name:
+        from jobhunter_pro.manual.llm import ManualLLM
+
+        try:
+            role_name = detect_role_llm(ManualLLM(config), minimal, roles)
+        except Exception:
+            return
+    if role_name:
+        try:
+            db.execute(
+                "UPDATE jobs SET role_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (str(role_name).strip()[:20], job["id"]),
+            )
+            db.commit()
+        except Exception:
+            return
+
+
 def score_jobs(
     config: dict,
     *,
@@ -892,6 +936,7 @@ def score_jobs(
                             else:
                                 update_job_status(db, job["id"], "filtered")
                                 filtered += 1
+                            _fill_job_role(db, job, config)
                         completed_job = True
                     elif outcome.failure_detail:
                         failed += 1

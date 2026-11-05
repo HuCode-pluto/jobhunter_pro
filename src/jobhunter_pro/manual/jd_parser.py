@@ -87,3 +87,35 @@ def detect_role_llm(llm, jd_json: dict, roles_cfg: list[dict]) -> str:
     except Exception:
         return ""
     return (r.get("role") or "").strip()[:20]
+
+
+INDUSTRY_PROMPT = """你是岗位行业分类助手。判断该岗位"工作内容所属的行业"，输出行业名称。
+规则：
+1. 只看岗位做什么、服务什么行业客户，不看公司注册类型
+2. 优先从以下标准行业名中选择（必须逐字一致）：
+   金融/银行、保险、电商/零售、制造业/智能制造、医疗健康、教育/培训、
+   企业服务/软件、游戏、物流/供应链、能源/电力、政府/政务、通信/运营商、
+   汽车、地产/建筑、互联网平台、网络安全
+3. 若都不贴切，输出一个 2-6 字的自定义行业名（如"跨境电商"、"工业自动化"）
+4. reason 用一句话说明判断依据
+
+只输出 JSON：{"industry": "", "reason": ""}"""
+
+
+def detect_industry_llm(llm, jd_json: dict, jd_text: str = "") -> str:
+    """LLM 分类岗位工作内容的行业名称；失败返回空串（由调用方决定兜底）。"""
+    text = " ".join(
+        [
+            jd_json.get("title", ""),
+            jd_json.get("company", ""),
+            " ".join(jd_json.get("responsibilities", [])),
+            " ".join(jd_json.get("must_have", [])),
+        ]
+    )
+    if jd_text:
+        text = f"{text}\nJD 原文：\n{jd_text[:1500]}"
+    try:
+        r = llm.chat_json(INDUSTRY_PROMPT, f"岗位信息：\n{text[:4000]}")
+    except Exception:
+        return ""
+    return (r.get("industry") or "").strip()[:20]

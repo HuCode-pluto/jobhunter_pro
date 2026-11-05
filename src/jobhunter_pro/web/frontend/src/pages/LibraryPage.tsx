@@ -721,16 +721,6 @@ export default function LibraryPage() {
                 {exporting ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-1.5 h-3.5 w-3.5" />}
                 {selectedIds.length ? `导出选中(${selectedIds.length})` : '导出全部'}
               </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setScoreDialogOpen(true)}
-                disabled={loading}
-              >
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                批量评分
-              </Button>
               <Select
                 value={exportFormat}
                 onChange={(e) => setExportFormat(e.target.value as 'xlsx' | 'csv')}
@@ -882,7 +872,9 @@ export default function LibraryPage() {
                   {pendingJobs.length === 0 && (
                     <tr>
                       <td colSpan={6} className="px-4 py-12 text-center text-sm text-muted">
-                        {pendingLoading ? '正在读取…' : '暂无待确认发送的岗位（评分达标后会自动进入这里）'}
+                        {pendingLoading
+                          ? '正在读取…'
+                          : '暂无待确认发送的岗位。数据链路：采集岗位 → 批量评分(达标→待确认) → 生成招呼语 → 人工确认 → 出现在这里 → 确认发送后由「监测执行」低频投递'}
                       </td>
                     </tr>
                   )}

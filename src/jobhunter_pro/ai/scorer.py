@@ -740,19 +740,16 @@ def _score_job_with_ai(
 
 
 def _fill_job_role(db, job: dict, config: dict) -> None:
-    """评分完成后回填岗位方向(工作内容的行业/方向),写入 jobs.role_type。
+    """评分完成后回填岗位方向(jobs.role_type)= 岗位工作内容所属的行业名称。
 
-    优先级:配置关键词命中 > LLM 归类(可输出真实方向标签,如"技术支持工程师")。
-    仅在 role_type 为空时执行;失败静默跳过,不影响评分主流程。
+    LLM 按标准行业清单归类(如 金融/银行、制造业/智能制造、企业服务/软件),
+    不贴切时输出 2-6 字自定义行业名。仅在 role_type 为空时执行;
+    失败静默跳过,不影响评分主流程。
     """
-    from jobhunter_pro.manual.jd_parser import detect_role, detect_role_llm
+    from jobhunter_pro.manual.jd_parser import detect_industry_llm
 
-    roles = config.get("job_preferences", {}).get("roles", [])
-    roles = [r for r in roles if isinstance(r, dict) and r.get("name")]
-    if not roles:
-        return
     try:
-        row = db.execute("SELECT role_type FROM jobs WHERE id = ?", (job["id"],)).fetchone()
+        row = db.execute("SELECT role_type, jd FROM jobs WHERE id = ?", (job["id"],)).fetchone()
     except Exception:
         return
     if not row or (row["role_type"] or "").strip():
@@ -764,19 +761,17 @@ def _fill_job_role(db, job: dict, config: dict) -> None:
         "must_have": [],
         "skill_points": [],
     }
-    role_name = detect_role(minimal, roles)
-    if not role_name:
-        from jobhunter_pro.manual.llm import ManualLLM
+    from jobhunter_pro.manual.llm import ManualLLM
 
-        try:
-            role_name = detect_role_llm(ManualLLM(config), minimal, roles)
-        except Exception:
-            return
-    if role_name:
+    try:
+        industry = detect_industry_llm(ManualLLM(config), minimal, row["jd"] or "")
+    except Exception:
+        return
+    if industry:
         try:
             db.execute(
                 "UPDATE jobs SET role_type = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-                (str(role_name).strip()[:20], job["id"]),
+                (industry[:20], job["id"]),
             )
             db.commit()
         except Exception:

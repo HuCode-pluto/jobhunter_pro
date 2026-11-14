@@ -8,6 +8,7 @@ import {
   Plus,
   RefreshCw,
   RotateCcw,
+  Search,
   Send,
   Sparkles,
   Trash2,
@@ -119,6 +120,7 @@ export default function LibraryPage() {
   const [detailJobId, setDetailJobId] = useState<string | null>(null)
   const [processingIds, setProcessingIds] = useState<string[]>([])
   const [batchProcessing, setBatchProcessing] = useState(false)
+  const [reevaluating, setReevaluating] = useState(false)
   const [viewMode, setViewMode] = useState<'jobs' | 'recycle' | 'pending'>('jobs')
   const [scoreDialogOpen, setScoreDialogOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -472,7 +474,7 @@ export default function LibraryPage() {
   }
 
   const startScoring = async (options: {
-    scope: 'pending' | 'failed' | 'selected' | 'all_scored'
+    scope: 'pending' | 'failed' | 'selected' | 'all_scored' | 'all_collected'
     limit: number | null
     job_ids: string[]
     force_rescore: boolean
@@ -490,6 +492,49 @@ export default function LibraryPage() {
       return { ok: true }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : '启动评分失败' }
+    }
+  }
+
+  const reevaluateCollected = async () => {
+    if (reevaluating) return
+    setReevaluating(true)
+    setFeedback(null)
+    try {
+      const options = {
+        scope: 'all_collected' as const,
+        limit: null,
+        job_ids: [],
+        force_rescore: true,
+      }
+      const previewRes = await fetch('/api/scoring/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ options }),
+      })
+      const preview = await previewRes.json().catch(() => ({}))
+      if (!previewRes.ok) throw new Error(preview.error || '无法预览重评范围')
+      if (!preview.eligible_jobs) {
+        showFeedback('error', '没有可重评的已采集岗位')
+        return
+      }
+      const confirmed = window.confirm(
+        `将按当前配置重新预筛并评分 ${preview.eligible_jobs} 个采集岗位，最多 ${preview.max_possible_requests} 次 AI 请求。\n不符合条件的岗位会标记为「已过滤」，已进入投递链路的岗位不会受影响。是否继续？`,
+      )
+      if (!confirmed) return
+      const result = await startScoring(options)
+      if (!result.ok) {
+        showFeedback('error', result.error || '启动重评失败')
+        return
+      }
+      showFeedback(
+        'success',
+        `已启动重评：${preview.eligible_jobs} 个采集岗位，进度请到「工作台」查看；不合格岗位会标记为「已过滤」。`,
+      )
+      await loadJobs()
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : '启动重评失败')
+    } finally {
+      setReevaluating(false)
     }
   }
 
@@ -652,9 +697,25 @@ export default function LibraryPage() {
             className="w-24"
             aria-label="城市"
           />
-          <Button type="button" variant="secondary" onClick={refresh} disabled={loading}>
-            <RefreshCw className={cn('mr-1.5 h-4 w-4', loading && 'animate-spin')} />
-            刷新
+          <Select
+            value={`${sortBy}-${sortOrder}`}
+            onChange={(e) => {
+              const [nextSort, nextOrder] = e.target.value.split('-') as ['score' | 'created', 'desc' | 'asc']
+              setSortBy(nextSort)
+              setSortOrder(nextOrder)
+              setPage(0)
+            }}
+            className="w-36"
+            aria-label="排序"
+          >
+            <option value="score-desc">评分从高到低</option>
+            <option value="score-asc">评分从低到高</option>
+            <option value="created-desc">最新采集</option>
+            <option value="created-asc">最早采集</option>
+          </Select>
+          <Button type="button" onClick={refresh} disabled={loading}>
+            {loading ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Search className="mr-1.5 h-4 w-4" />}
+            查询
           </Button>
           <Button type="button" className="ml-auto" onClick={() => setAddOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
@@ -739,6 +800,19 @@ export default function LibraryPage() {
               >
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                 批量评分
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void reevaluateCollected()}
+                disabled={loading || reevaluating}
+                title="按当前配置重新预筛并评分所有已采集岗位，不合格岗位标记为已过滤"
+              >
+                {reevaluating
+                  ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  : <RotateCcw className="mr-1.5 h-3.5 w-3.5" />}
+                {reevaluating ? '重评中…' : '一键重评采集岗'}
               </Button>
               <Select
                 value={batchStatus}

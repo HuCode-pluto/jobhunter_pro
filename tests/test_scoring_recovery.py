@@ -80,6 +80,44 @@ def test_selected_jobs_do_not_rescore_existing_results_without_explicit_force(tm
 	assert {job["id"] for job in forced} == {"pending", "scored"}
 
 
+def test_all_collected_scope_rescores_collected_but_skips_manual_and_pipeline(tmp_path):
+	db = get_db(tmp_path / "all-collected.db")
+	try:
+		for job_id in (
+			"collected-pending",
+			"collected-scored",
+			"collected-filtered",
+			"collected-sent",
+			"collected-deleted",
+			"manual-pending",
+		):
+			insert_job(db, _job(job_id))
+		update_job_score(db, "collected-scored", 82, "evaluated")
+		update_job_status(db, "collected-scored", "scored")
+		update_job_status(db, "collected-filtered", "filtered")
+		db.execute("UPDATE jobs SET status = 'sent' WHERE id = 'collected-sent'")
+		db.execute("UPDATE jobs SET source_platform = 'manual' WHERE id = 'manual-pending'")
+		db.commit()
+		soft_delete_jobs(db, ["collected-deleted"], confirmed=True)
+
+		selected = select_scoring_jobs(db, scope="all_collected", force_rescore=True)
+		preview = preview_scoring(db, scope="all_collected", force_rescore=True)
+	finally:
+		db.close()
+
+	assert {job["id"] for job in selected} == {
+		"collected-pending",
+		"collected-scored",
+		"collected-filtered",
+	}
+	assert preview["eligible_jobs"] == 3
+
+
+def test_all_collected_scope_requires_force_rescore():
+	with pytest.raises(ValueError, match="已采集岗位"):
+		validate_options(scope="all_collected")
+
+
 def test_scoring_selection_rejects_non_array_job_ids():
 	with pytest.raises(ValueError, match="岗位 ID 必须是数组"):
 		validate_options(scope="selected", job_ids="job-one")

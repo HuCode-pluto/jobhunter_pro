@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ScoringProgress } from './ScoringProgress'
 import { Button } from '@/components/ui/button'
 
-type ScoreScope = 'pending' | 'failed' | 'selected' | 'all_scored'
+type ScoreScope = 'pending' | 'failed' | 'selected' | 'all_scored' | 'all_collected'
 
 interface ScorePreview {
   eligible_jobs: number
@@ -35,6 +35,7 @@ const scopeLabels: Record<ScoreScope, string> = {
   failed: '只重试失败',
   selected: '选中岗位(重新评分)',
   all_scored: '重新评分全部有效评分岗位',
+  all_collected: '按最新条件重评全部采集岗位',
 }
 
 export function ScoreJobsDialog({ open, selectedJobIds, onClose, onStart }: ScoreJobsDialogProps) {
@@ -77,7 +78,7 @@ export function ScoreJobsDialog({ open, selectedJobIds, onClose, onStart }: Scor
     setLoading(true)
     setMessage('')
     try {
-      const forceRescore = scope === 'all_scored' || scope === 'selected'
+      const forceRescore = scope === 'all_scored' || scope === 'selected' || scope === 'all_collected'
       const jobIds = scope === 'selected' ? selectedJobIds : []
       const res = await fetch('/api/scoring/preview', {
         method: 'POST',
@@ -143,6 +144,7 @@ export function ScoreJobsDialog({ open, selectedJobIds, onClose, onStart }: Scor
   const start = async () => {
     if (!preview?.eligible_jobs) return
     if (scope === 'all_scored' && !window.confirm('将重新评分所有仍可重评的有效评分岗位，已进入投递链路的岗位不会触碰。确认继续？')) return
+    if (scope === 'all_collected' && !window.confirm('将按当前配置重新预筛并评分所有已采集岗位；不合格岗位会标记为「已过滤」，已进入投递链路的岗位不会触碰。确认继续？')) return
     if (!window.confirm(`本轮最多发出 ${preview.max_possible_requests} 次 AI 请求，是否开始？`)) return
     setLoading(true)
     setMessage('')
@@ -151,7 +153,7 @@ export function ScoreJobsDialog({ open, selectedJobIds, onClose, onStart }: Scor
         scope,
         limit,
         job_ids: scope === 'selected' ? selectedJobIds : [],
-        force_rescore: scope === 'all_scored' || scope === 'selected',
+        force_rescore: scope === 'all_scored' || scope === 'selected' || scope === 'all_collected',
       })
       if (result.ok) {
         onClose()

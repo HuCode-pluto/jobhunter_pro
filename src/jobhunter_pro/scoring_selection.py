@@ -7,7 +7,7 @@ import sqlite3
 from typing import Any, Iterable
 
 
-SCORE_SCOPES = {"pending", "failed", "selected", "all_scored"}
+SCORE_SCOPES = {"pending", "failed", "selected", "all_scored", "all_collected"}
 PREFILTER_PREFIXES = ("预筛不通过:", "AI评分失败:", "AI 评分失败:", "评分失败:")
 
 
@@ -42,6 +42,8 @@ def validate_options(
 		raise ValueError("岗位池已选评分必须提供岗位 ID")
 	if scope == "all_scored" and not force_rescore:
 		raise ValueError("重新评分已有结果需要明确确认 force_rescore=true")
+	if scope == "all_collected" and not force_rescore:
+		raise ValueError("重新评分已采集岗位需要明确确认 force_rescore=true")
 	return {
 		"scope": scope,
 		"limit": limit,
@@ -76,6 +78,10 @@ def _query_jobs(conn: sqlite3.Connection, options: dict[str, Any]) -> list[dict[
 		params.append("pending")
 	elif scope == "all_scored":
 		where.append("status IN ('scored', 'ready', 'filtered')")
+	elif scope == "all_collected":
+		# Re-evaluate platform-collected jobs only; manual library jobs keep
+		# their manually managed status.
+		where.append("(source_platform IS NULL OR source_platform != 'manual')")
 	elif scope == "selected":
 		if not ids:
 			return []
@@ -119,6 +125,8 @@ def preview_scoring(
 	else:
 		where = ["deleted_at IS NULL", "status IN ('pending', 'scored', 'ready', 'filtered')"]
 		params: list[Any] = []
+		if options["scope"] == "all_collected":
+			where.append("(source_platform IS NULL OR source_platform != 'manual')")
 		row = conn.execute("SELECT COUNT(*) AS cnt FROM jobs WHERE " + " AND ".join(where), params).fetchone()
 		skipped = max(int(row["cnt"] or 0) - len(selected), 0)
 	try:

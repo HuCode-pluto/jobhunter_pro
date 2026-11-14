@@ -2039,7 +2039,7 @@ function JobsPoolView({ updateJobStatus }: { updateJobStatus: (jobId: string, st
   }
 
   const startScoring = async (options: {
-    scope: 'pending' | 'failed' | 'selected' | 'all_scored'
+    scope: 'pending' | 'failed' | 'selected' | 'all_scored' | 'all_collected'
     limit: number | null
     job_ids: string[]
     force_rescore: boolean

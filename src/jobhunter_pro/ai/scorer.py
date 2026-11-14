@@ -18,6 +18,7 @@ from jobhunter_pro.db import (
     get_jobs_by_status,
     persist_job_score_and_trace,
     reset_ai_filtered_jobs,
+    soft_delete_jobs,
     update_job_quick_score,
     update_job_score,
     update_job_status,
@@ -778,6 +779,22 @@ def _fill_job_role(db, job: dict, config: dict) -> None:
             return
 
 
+def _recycle_filtered_job(db, job: dict, reason: str) -> None:
+    """Move a collected job that failed scoring into the recycle bin."""
+    if str(job.get("source_platform") or "boss") == "manual":
+        return
+    try:
+        soft_delete_jobs(
+            db,
+            [str(job["id"])],
+            confirmed=True,
+            reason=reason,
+            allow_scoring_run=True,
+        )
+    except Exception as exc:
+        console.print(f"[yellow]过滤岗位移入回收站失败：{exc}[/yellow]")
+
+
 def score_jobs(
     config: dict,
     *,
@@ -786,6 +803,7 @@ def score_jobs(
     job_ids: list[str] | None = None,
     force_rescore: bool = False,
     rescore_filtered: bool = False,
+    recycle_filtered: bool = False,
 ) -> tuple[int, int]:
     """Score every unscored pending job; previously scored jobs keep their result."""
     db = get_db()
@@ -848,6 +866,8 @@ def score_jobs(
                 if qs == 0:
                     update_job_score(db, job["id"], qs, f"预筛不通过: {qs_reason}")
                     update_job_status(db, job["id"], "filtered")
+                    if recycle_filtered:
+                        _recycle_filtered_job(db, job, f"预筛不通过: {qs_reason}")
                     filtered += 1
                     prefiltered += 1
                     processed += 1
@@ -930,6 +950,12 @@ def score_jobs(
                                 scored += 1
                             else:
                                 update_job_status(db, job["id"], "filtered")
+                                if recycle_filtered:
+                                    _recycle_filtered_job(
+                                        db,
+                                        job,
+                                        f"AI 评分 {result.score} 低于阈值 {threshold}",
+                                    )
                                 filtered += 1
                             _fill_job_role(db, job, config)
                         completed_job = True

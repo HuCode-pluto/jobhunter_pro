@@ -121,6 +121,7 @@ export default function LibraryPage() {
   const [processingIds, setProcessingIds] = useState<string[]>([])
   const [batchProcessing, setBatchProcessing] = useState(false)
   const [reevaluating, setReevaluating] = useState(false)
+  const [cleaningFiltered, setCleaningFiltered] = useState(false)
   const [viewMode, setViewMode] = useState<'jobs' | 'recycle' | 'pending'>('jobs')
   const [scoreDialogOpen, setScoreDialogOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -518,7 +519,7 @@ export default function LibraryPage() {
         return
       }
       const confirmed = window.confirm(
-        `将按当前配置重新预筛并评分 ${preview.eligible_jobs} 个采集岗位，最多 ${preview.max_possible_requests} 次 AI 请求。\n不符合条件的岗位会标记为「已过滤」，已进入投递链路的岗位不会受影响。是否继续？`,
+        `将按当前配置重新预筛并评分 ${preview.eligible_jobs} 个采集岗位，最多 ${preview.max_possible_requests} 次 AI 请求。\n不符合条件的岗位会自动移入回收站（可恢复），已进入投递链路的岗位不会受影响。是否继续？`,
       )
       if (!confirmed) return
       const result = await startScoring(options)
@@ -528,13 +529,41 @@ export default function LibraryPage() {
       }
       showFeedback(
         'success',
-        `已启动重评：${preview.eligible_jobs} 个采集岗位，进度请到「工作台」查看；不合格岗位会标记为「已过滤」。`,
+        `已启动重评：${preview.eligible_jobs} 个采集岗位，进度请到「工作台」查看；不合格岗位会自动移入回收站（可在回收站恢复）。`,
       )
       await loadJobs()
     } catch (err) {
       showFeedback('error', err instanceof Error ? err.message : '启动重评失败')
     } finally {
       setReevaluating(false)
+    }
+  }
+
+  const recycleFilteredJobs = async () => {
+    if (cleaningFiltered) return
+    setCleaningFiltered(true)
+    setFeedback(null)
+    try {
+      const countRes = await fetch('/api/library/jobs?status=filtered&limit=1', { cache: 'no-store' })
+      if (!countRes.ok) throw new Error('无法读取已过滤岗位数量')
+      const count = Number(countRes.headers.get('X-Total-Count') || 0)
+      if (!count) {
+        showFeedback('success', '没有需要清理的已过滤岗位')
+        return
+      }
+      const confirmed = window.confirm(
+        `将把 ${count} 个已过滤岗位移入回收站，可在回收站恢复。是否继续？`,
+      )
+      if (!confirmed) return
+      const res = await fetch('/api/library/recycle-filtered', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || '移入回收站失败')
+      showFeedback('success', `已将 ${data.count} 个已过滤岗位移入回收站`)
+      await loadJobs()
+    } catch (err) {
+      showFeedback('error', err instanceof Error ? err.message : '移入回收站失败')
+    } finally {
+      setCleaningFiltered(false)
     }
   }
 
@@ -558,6 +587,7 @@ export default function LibraryPage() {
         <h1 className="text-xl font-black text-foreground">岗位库</h1>
         <p className="mt-1 text-xs text-muted">
           手动粘贴与平台采集的岗位统一管理：AI 解析评分、投递材料定制、面试准备与台账。
+          默认按评分从高到低排序；重评不合格的岗位会自动移入回收站。
         </p>
       </div>
 
@@ -807,12 +837,25 @@ export default function LibraryPage() {
                 size="sm"
                 onClick={() => void reevaluateCollected()}
                 disabled={loading || reevaluating}
-                title="按当前配置重新预筛并评分所有已采集岗位，不合格岗位标记为已过滤"
+                title="按当前配置重新预筛并评分所有已采集岗位，不合格岗位会移入回收站"
               >
                 {reevaluating
                   ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                   : <RotateCcw className="mr-1.5 h-3.5 w-3.5" />}
                 {reevaluating ? '重评中…' : '一键重评采集岗'}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => void recycleFilteredJobs()}
+                disabled={loading || cleaningFiltered}
+                title="把所有已过滤岗位移入回收站，可在回收站恢复"
+              >
+                {cleaningFiltered
+                  ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  : <Trash2 className="mr-1.5 h-3.5 w-3.5" />}
+                {cleaningFiltered ? '清理中…' : '已过滤移入回收站'}
               </Button>
               <Select
                 value={batchStatus}

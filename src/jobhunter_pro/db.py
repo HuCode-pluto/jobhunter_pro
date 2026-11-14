@@ -451,13 +451,15 @@ def soft_delete_jobs(
     *,
     confirmed: bool = False,
     reason: str = "用户移入回收站",
+    allow_scoring_run: bool = False,
 ) -> dict[str, Any]:
     if confirmed is not True:
         raise JobDeletionConfirmationError("移入回收站需要 confirmed=true")
     ids = _normalize_job_ids(job_ids, required=True)
-    run_conflicts = _scoring_run_conflicts(conn, set(ids))
-    if run_conflicts:
-        raise JobDeletionConflictError("岗位仍被评分任务引用，请先结束该评分任务", blocked=run_conflicts)
+    if not allow_scoring_run:
+        run_conflicts = _scoring_run_conflicts(conn, set(ids))
+        if run_conflicts:
+            raise JobDeletionConflictError("岗位仍被评分任务引用，请先结束该评分任务", blocked=run_conflicts)
     rows = _job_rows_by_ids(conn, ids)
     found_ids = {str(row["id"]) for row in rows}
     active_rows = [row for row in rows if row.get("deleted_at") is None]

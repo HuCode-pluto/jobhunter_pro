@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "jobhunter_pro"
-version = "0.3.0"
+version = "0.3.1"
 description = "JobHunter Pro - 求职自动化 + 手动求职流水线（采集/评分/投递/面试复盘/技能地图）"
 license = { file = "LICENSE" }
 requires-python = ">=3.10"

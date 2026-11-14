@@ -144,7 +144,7 @@ export function ScoreJobsDialog({ open, selectedJobIds, onClose, onStart }: Scor
   const start = async () => {
     if (!preview?.eligible_jobs) return
     if (scope === 'all_scored' && !window.confirm('将重新评分所有仍可重评的有效评分岗位，已进入投递链路的岗位不会触碰。确认继续？')) return
-    if (scope === 'all_collected' && !window.confirm('将按当前配置重新预筛并评分所有已采集岗位；不合格岗位会标记为「已过滤」，已进入投递链路的岗位不会触碰。确认继续？')) return
+    if (scope === 'all_collected' && !window.confirm('将按当前配置重新预筛并评分所有已采集岗位；不合格岗位会移入回收站（可恢复），已进入投递链路的岗位不会触碰。确认继续？')) return
     if (!window.confirm(`本轮最多发出 ${preview.max_possible_requests} 次 AI 请求，是否开始？`)) return
     setLoading(true)
     setMessage('')

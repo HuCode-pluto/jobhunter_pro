@@ -55,6 +55,38 @@ class ManualDbTests(unittest.TestCase):
         self.assertEqual(len(skills), 1)
         self.assertEqual(skills[0]["frequency"], 2)
 
+    def test_recycle_filtered_jobs_moves_only_filtered(self):
+        mdb.insert_library_job(self.db, {
+            "source_platform": "manual", "title": "过滤岗", "company": "A 公司",
+            "jd": "x", "status": "filtered", "score": 10,
+        })
+        mdb.insert_library_job(self.db, {
+            "source_platform": "manual", "title": "保留岗", "company": "B 公司",
+            "jd": "x", "status": "matched", "score": 80,
+        })
+        result = mdb.recycle_filtered_jobs(self.db)
+        self.assertEqual(result["count"], 1)
+        rows = {
+            row["title"]: row["deleted_at"]
+            for row in self.db.execute("SELECT title, deleted_at FROM jobs")
+        }
+        self.assertIsNotNone(rows["过滤岗"])
+        self.assertIsNone(rows["保留岗"])
+
+    def test_library_list_sorts_before_pagination(self):
+        for title, score in (
+            ("a", 10), ("b", 90), ("c", 50), ("d", 70), ("e", 30),
+        ):
+            mdb.insert_library_job(self.db, {
+                "source_platform": "manual", "title": title, "company": "公司",
+                "jd": "x", "status": "matched", "score": score,
+            })
+        page1, total = mdb.list_library_jobs(self.db, limit=2, offset=0)
+        page2, _ = mdb.list_library_jobs(self.db, limit=2, offset=2)
+        self.assertEqual(total, 5)
+        self.assertEqual([row["score"] for row in page1], [90, 70])
+        self.assertEqual([row["score"] for row in page2], [50, 30])
+
     def test_library_list_filters_blocked_companies(self):
         mdb.insert_library_job(self.db, {
             "source_platform": "manual", "title": "保留岗", "company": "正常公司",

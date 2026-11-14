@@ -619,6 +619,7 @@ def _execute_score(task: WorkbenchTask, config: dict) -> None:
 			limit=None,
 			job_ids=list(options.get("job_ids", [])),
 			force_rescore=bool(options.get("force_rescore")),
+			recycle_filtered=bool(options.get("recycle_filtered")),
 		)
 	except Exception as exc:
 		update_scoring_run(db_path, run_id, status="failed", error=str(exc)[:1000])
@@ -1735,13 +1736,19 @@ def api_scoring_start():
 		job_ids = [str(job["id"]) for job in selected]
 		if not job_ids:
 			return _json_response({"error": "没有符合条件的待评分岗位"}, 400)
+		recycle_filtered = options["scope"] == "all_collected"
 		stored_options = {
 			"scope": options["scope"],
 			"limit": options["limit"],
 			"force_rescore": options["force_rescore"],
+			"recycle_filtered": recycle_filtered,
 		}
 		create_scoring_run(db_path, run_id=run_id, options=stored_options, job_ids=job_ids)
-		runtime_options = {"job_ids": job_ids, "force_rescore": options["force_rescore"]}
+		runtime_options = {
+			"job_ids": job_ids,
+			"force_rescore": options["force_rescore"],
+			"recycle_filtered": recycle_filtered,
+		}
 		with job_mutation_lock:
 			update_scoring_run(db_path, run_id, status="running")
 			task = task_runner.start("score", _task_config({
@@ -3686,6 +3693,28 @@ def api_library_jobs():
 		)
 		response.headers["X-Total-Count"] = str(total)
 		return _json_response([serialize_job(dict(r)) for r in rows])
+	finally:
+		db.close()
+
+
+@app.route("/api/library/recycle-filtered", method="POST")
+def api_library_recycle_filtered():
+	db = _get_web_db()
+	try:
+		from jobhunter_pro.manual.db import recycle_filtered_jobs
+
+		try:
+			result = recycle_filtered_jobs(db)
+		except JobDeletionConflictError as exc:
+			return _json_response({
+				"error": "有评分任务正在引用已过滤岗位，请等评分结束后再清理。",
+				"blocked": getattr(exc, "blocked", []),
+			}, 409)
+		return _json_response({
+			"success": True,
+			"count": result["count"],
+			"requested_count": result["requested_count"],
+		})
 	finally:
 		db.close()
 

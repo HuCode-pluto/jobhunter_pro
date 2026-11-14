@@ -125,8 +125,11 @@ def list_library_jobs(
         where += " AND city LIKE ?"
         args.append(f"%{city}%")
     total = conn.execute(f"SELECT COUNT(*) FROM jobs {where}", args).fetchone()[0]
+    order_clause = "created_at" if sort == "created" else "COALESCE(score, 0)"
+    direction = "ASC" if order == "asc" else "DESC"
+    # 排序必须在 SQL 分页前完成，否则每一页只会在本页内重新排序。
     rows_holder = conn.execute(
-        f"SELECT * FROM jobs {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+        f"SELECT * FROM jobs {where} ORDER BY {order_clause} {direction}, id DESC LIMIT ? OFFSET ?",
         [*args, limit, offset],
     ).fetchall()
     salary_active = salary_min is not None or salary_max is not None
@@ -147,11 +150,6 @@ def list_library_jobs(
         rows_holder = [row for row in rows_holder if _overlaps(row)]
         # 薪资过滤在当前分页窗口内执行(与原岗位池前端过滤口径一致),total 同步近似
         total = len(rows_holder)
-    order_clause = "created_at" if sort == "created" else "COALESCE(score, 0)"
-    direction = "ASC" if order == "asc" else "DESC"
-    # 薪资区间在 Python 层过滤后,按分页窗口重新排序截断
-    rows_holder.sort(key=lambda row: row["created_at"] if sort == "created" else (row["score"] or 0),
-                     reverse=(order == "desc"))
     rows = rows_holder
     if blocked_companies:
         from jobhunter_pro.job_filters import matching_blocked_company
@@ -161,6 +159,22 @@ def list_library_jobs(
             if matching_blocked_company(row["company"], blocked_companies) is None
         ]
     return rows, total
+
+
+def recycle_filtered_jobs(conn: sqlite3.Connection, reason="已过滤岗位移入回收站") -> dict[str, int]:
+    """Move every active filtered job into the recycle bin."""
+    from jobhunter_pro.db import soft_delete_jobs
+
+    ids = [
+        str(row["id"])
+        for row in conn.execute(
+            "SELECT id FROM jobs WHERE deleted_at IS NULL AND status = 'filtered'"
+        ).fetchall()
+    ]
+    if not ids:
+        return {"requested_count": 0, "count": 0}
+    result = soft_delete_jobs(conn, ids, confirmed=True, reason=reason)
+    return {"requested_count": len(ids), "count": int(result.get("affected_count", 0))}
 
 
 def update_library_job(conn: sqlite3.Connection, job_id: str, **fields):

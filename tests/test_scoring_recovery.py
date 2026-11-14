@@ -118,6 +118,38 @@ def test_all_collected_scope_requires_force_rescore():
 		validate_options(scope="all_collected")
 
 
+def test_soft_delete_can_bypass_scoring_run_for_internal_recycling(tmp_path):
+	db_path = tmp_path / "recycle-bypass.db"
+	db = get_db(db_path)
+	try:
+		insert_job(db, _job("filtered-job"))
+		create_scoring_run(
+			db_path,
+			run_id="run-1",
+			options={"scope": "selected"},
+			job_ids=["filtered-job"],
+		)
+		update_scoring_run(db_path, "run-1", status="running")
+		with pytest.raises(JobDeletionConflictError):
+			soft_delete_jobs(db, ["filtered-job"], confirmed=True)
+		result = soft_delete_jobs(
+			db,
+			["filtered-job"],
+			confirmed=True,
+			reason="评分未通过，自动移入回收站",
+			allow_scoring_run=True,
+		)
+		row = db.execute(
+			"SELECT deleted_at, deleted_reason FROM jobs WHERE id = 'filtered-job'"
+		).fetchone()
+	finally:
+		db.close()
+
+	assert result["affected_count"] == 1
+	assert row["deleted_at"] is not None
+	assert "自动移入回收站" in row["deleted_reason"]
+
+
 def test_scoring_selection_rejects_non_array_job_ids():
 	with pytest.raises(ValueError, match="岗位 ID 必须是数组"):
 		validate_options(scope="selected", job_ids="job-one")

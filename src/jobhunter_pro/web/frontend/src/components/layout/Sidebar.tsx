@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { BookOpenText, Bot, BriefcaseBusiness, Github, LayoutDashboard, Map, Mic, MessagesSquare, Radar, Settings } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useAppVersion } from '@/hooks/useAppVersion'
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: '工作台' },
@@ -22,6 +23,7 @@ interface SidebarProps {
 
 export function Sidebar({ pendingReplies: pendingRepliesProp }: SidebarProps) {
   const [pendingReplies, setPendingReplies] = useState(pendingRepliesProp ?? 0)
+  const version = useAppVersion()
 
   useEffect(() => {
     if (pendingRepliesProp !== undefined) {
@@ -53,7 +55,7 @@ export function Sidebar({ pendingReplies: pendingRepliesProp }: SidebarProps) {
           </div>
           <div className="hidden md:block">
             <div className="font-black text-sm tracking-tight text-foreground">JobHunter Pro</div>
-            <div className="text-[11px] text-muted">v0.1.0 · 本地控制台</div>
+            <div className="text-[11px] text-muted">{version ? `v${version} · 本地控制台` : '本地控制台'}</div>
           </div>
         </div>
       </div>

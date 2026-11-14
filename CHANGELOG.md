@@ -2,6 +2,23 @@
 
 本文件自 v0.1.0 起记录 JobHunter Pro 的版本历史。更名前的上游版本历史见上游项目 [BossHunter](https://github.com/shengjidaguai-china/BossHunter) 的 CHANGELOG。
 
+## 版本规则
+
+- 新功能：次版本号 +1（如 `0.1.0` → `0.2.0`）
+- 修复和小改动：修订号 +1（如 `0.2.0` → `0.2.1`）
+- 不兼容变更：在 `0.x` 阶段通过次版本号提升，并在条目中注明
+- 每次发布同步更新 `pyproject.toml`、`src/jobhunter_pro/__init__.py`、前端 `package.json`，并打 `vX.Y.Z` Git tag
+
+## v0.2.0
+
+2026-11-14
+
+- 首页新增「快捷操作」卡片：项目重启按钮，以及 BOSS 直聘 / 智联招聘 / 前程无忧 / 猎聘 的登录入口
+- 登录入口在专用 Chrome 未运行时自动拉起 `jobhunter_pro` 独立 profile；Linux 通过 `systemd-run` 启动，面板重启不会关闭浏览器
+- 新增 `POST /api/system/restart`（systemd 用户服务）和 `POST /api/browser/open-platform`（平台白名单）接口
+- 首页显示当前运行版本号，健康检查返回 `0.2.0`
+- 新增后端测试覆盖重启、平台白名单、Chrome 自动启动
+
 ## v0.1.0
 
 2026-11-04

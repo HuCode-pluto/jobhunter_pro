@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useAppVersion } from '@/hooks/useAppVersion'
 import { PLATFORM_LABELS } from '@/lib/platforms'
 import { cn } from '@/lib/utils'
 
@@ -12,6 +13,7 @@ export function QuickActions({ onNotice }: { onNotice?: (message: string) => voi
   const [opening, setOpening] = useState<LoginPlatform | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const version = useAppVersion()
   const pollTimer = useRef<number | null>(null)
 
   useEffect(() => () => {
@@ -86,7 +88,17 @@ export function QuickActions({ onNotice }: { onNotice?: (message: string) => voi
     <section className="rounded-2xl border border-card-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-bold tracking-tight">快捷操作</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-bold tracking-tight">快捷操作</h2>
+            {version && (
+              <span
+                className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-primary"
+                title="当前运行版本"
+              >
+                v{version}
+              </span>
+            )}
+          </div>
           <p className="mt-1 text-xs leading-5 text-muted">
             登录按钮会在专用 Chrome 窗口打开官网；如果专用 Chrome 未运行，会自动启动。
             项目重启只重载本地服务，不删除已入库的数据。

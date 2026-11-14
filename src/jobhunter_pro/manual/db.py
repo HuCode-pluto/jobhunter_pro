@@ -154,7 +154,7 @@ def list_library_jobs(
                      reverse=(order == "desc"))
     rows = rows_holder
     if blocked_companies:
-        from jobhunter_pro.db import matching_blocked_company
+        from jobhunter_pro.job_filters import matching_blocked_company
 
         rows = [
             row for row in rows

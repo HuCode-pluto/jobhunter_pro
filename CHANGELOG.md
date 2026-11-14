@@ -9,6 +9,13 @@
 - 不兼容变更：在 `0.x` 阶段通过次版本号提升，并在条目中注明
 - 每次发布同步更新 `pyproject.toml`、`src/jobhunter_pro/__init__.py`、前端 `package.json`，并打 `vX.Y.Z` Git tag
 
+## v0.2.1
+
+2026-11-14
+
+- 修复岗位库列表在配置「屏蔽公司」时返回 500：`matching_blocked_company` 改为从 `jobhunter_pro.job_filters` 导入
+- 新增岗位库屏蔽公司过滤的回归测试
+
 ## v0.2.0
 
 2026-11-14

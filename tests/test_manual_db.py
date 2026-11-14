@@ -55,6 +55,18 @@ class ManualDbTests(unittest.TestCase):
         self.assertEqual(len(skills), 1)
         self.assertEqual(skills[0]["frequency"], 2)
 
+    def test_library_list_filters_blocked_companies(self):
+        mdb.insert_library_job(self.db, {
+            "source_platform": "manual", "title": "保留岗", "company": "正常公司",
+            "jd": "x", "status": "matched", "score": 70,
+        })
+        mdb.insert_library_job(self.db, {
+            "source_platform": "manual", "title": "屏蔽岗", "company": "外包黑名单公司",
+            "jd": "x", "status": "matched", "score": 80,
+        })
+        rows, _ = mdb.list_library_jobs(self.db, blocked_companies=["黑名单"])
+        self.assertEqual([row["title"] for row in rows], ["保留岗"])
+
     def test_library_list_filters_by_source_and_keyword(self):
         mdb.insert_library_job(self.db, {
             "source_platform": "manual", "title": "手动运维岗", "company": "A 公司",

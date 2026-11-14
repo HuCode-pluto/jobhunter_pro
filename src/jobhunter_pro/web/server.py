@@ -36,6 +36,7 @@ from jobhunter_pro.agent_api import (
 )
 from jobhunter_pro import __version__
 from jobhunter_pro.ai.credentials import AIRequestError, get_ai_api_key, list_ai_models
+from jobhunter_pro.browser.launcher import chrome_debug_ready, ensure_chrome_running
 from jobhunter_pro.ai.scorer import sanitize_score_trace
 from jobhunter_pro.cities import CityRefreshError, get_city_map, load_city_snapshot, refresh_city_cache
 from jobhunter_pro.config import (
@@ -1140,12 +1141,32 @@ def api_browser_open_platform():
 
 	from jobhunter_pro.browser import new_tab
 
+	config = load_config(CONFIG_PATH)
+	browser_cfg = config.get("browser", {}) if isinstance(config, dict) else {}
+	raw_ports = browser_cfg.get("chrome_ports") if isinstance(browser_cfg, dict) else None
+	chrome_ports: list[int] = []
+	for value in raw_ports or [9222]:
+		try:
+			chrome_ports.append(int(value))
+		except (TypeError, ValueError):
+			continue
+	if not chrome_ports:
+		chrome_ports = [9222]
+
+	# Keep normal Chrome untouched; only start the dedicated profile when none
+	# of the configured debugging endpoints is reachable.
+	if not any(chrome_debug_ready(port) for port in chrome_ports):
+		if not ensure_chrome_running(chrome_ports[0]):
+			return _json_response({
+				"error": "专用 Chrome 未运行，自动启动失败；请确认已安装 Google Chrome，或运行启动脚本后重试。",
+			}, 503)
+
 	try:
 		target_id = new_tab(url, background=False)
 	except Exception as exc:
 		return _json_response({"error": f"打开登录页失败：{exc}"}, 503)
 	if not target_id:
-		return _json_response({"error": "未连接专用 Chrome，请先确认 Chrome 已启动"}, 503)
+		return _json_response({"error": "专用 Chrome 已启动，但浏览器连接未就绪，请稍后重试。"}, 503)
 	return _json_response({
 		"success": True,
 		"platform": platform,

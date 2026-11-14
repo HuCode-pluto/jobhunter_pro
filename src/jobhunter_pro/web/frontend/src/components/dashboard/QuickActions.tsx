@@ -43,7 +43,10 @@ export function QuickActions({ onNotice }: { onNotice?: (message: string) => voi
   }
 
   const restartProject = async () => {
-    if (!window.confirm('重启会中断正在运行的采集/评分任务，但不会删除已入库的数据。确定重启？')) {
+    const confirmed = window.confirm(
+      '重启会中断正在运行的采集/评分任务，但不会删除已入库的数据。确定重启？',
+    )
+    if (!confirmed) {
       return
     }
     setRestarting(true)
@@ -85,8 +88,8 @@ export function QuickActions({ onNotice }: { onNotice?: (message: string) => voi
         <div>
           <h2 className="text-lg font-bold tracking-tight">快捷操作</h2>
           <p className="mt-1 text-xs leading-5 text-muted">
-            登录按钮会在专用 Chrome 窗口打开官网；项目重启只重载本地服务，不删除已入库的数据。
-            请保持专用 Chrome 窗口开启。
+            登录按钮会在专用 Chrome 窗口打开官网；如果专用 Chrome 未运行，会自动启动。
+            项目重启只重载本地服务，不删除已入库的数据。
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => void restartProject()} disabled={restarting}>

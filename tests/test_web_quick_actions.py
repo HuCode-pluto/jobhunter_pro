@@ -13,6 +13,10 @@ class QuickActionApiTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         server.set_base_dir(Path(self.tmp.name))
+        server.CONFIG_PATH.write_text(
+            "browser:\n  chrome_ports:\n  - 9229\n",
+            encoding="utf-8",
+        )
 
     def tearDown(self):
         server.set_base_dir(Path(__file__).parent)
@@ -61,7 +65,10 @@ class QuickActionApiTests(unittest.TestCase):
         new_tab.assert_not_called()
 
     def test_open_platform_opens_whitelisted_url(self):
-        with patch("jobhunter_pro.browser.new_tab", return_value="target-1") as new_tab:
+        with (
+            patch.object(server, "chrome_debug_ready", return_value=True),
+            patch("jobhunter_pro.browser.new_tab", return_value="target-1") as new_tab,
+        ):
             status, _, body = self._request("/api/browser/open-platform", "POST", {"platform": "zhilian"})
         self.assertTrue(status.startswith("200"), body)
         payload = json.loads(body)
@@ -70,8 +77,33 @@ class QuickActionApiTests(unittest.TestCase):
         self.assertEqual(payload["url"], server.PLATFORM_LOGIN_URLS["zhilian"])
         new_tab.assert_called_once_with(server.PLATFORM_LOGIN_URLS["zhilian"], background=False)
 
+    def test_open_platform_launches_dedicated_chrome_when_missing(self):
+        with (
+            patch.object(server, "chrome_debug_ready", return_value=False),
+            patch.object(server, "ensure_chrome_running", return_value=True) as ensure,
+            patch("jobhunter_pro.browser.new_tab", return_value="target-2") as new_tab,
+        ):
+            status, _, body = self._request("/api/browser/open-platform", "POST", {"platform": "boss"})
+        self.assertTrue(status.startswith("200"), body)
+        ensure.assert_called_once_with(9229)
+        new_tab.assert_called_once()
+
+    def test_open_platform_reports_launch_failure(self):
+        with (
+            patch.object(server, "chrome_debug_ready", return_value=False),
+            patch.object(server, "ensure_chrome_running", return_value=False),
+            patch("jobhunter_pro.browser.new_tab") as new_tab,
+        ):
+            status, _, body = self._request("/api/browser/open-platform", "POST", {"platform": "boss"})
+        self.assertTrue(status.startswith("503"), body)
+        self.assertIn("自动启动失败", body)
+        new_tab.assert_not_called()
+
     def test_open_platform_reports_disconnected_chrome(self):
-        with patch("jobhunter_pro.browser.new_tab", return_value=None):
+        with (
+            patch.object(server, "chrome_debug_ready", return_value=True),
+            patch("jobhunter_pro.browser.new_tab", return_value=None),
+        ):
             status, _, body = self._request("/api/browser/open-platform", "POST", {"platform": "boss"})
         self.assertTrue(status.startswith("503"), body)
         self.assertIn("Chrome", body)

@@ -496,7 +496,14 @@ class CollectionOrchestrator:
 
                 score_config = dict(self.config)
                 score_config["_workbench_stop_event"] = self.stop_event
-                score_jobs(score_config, scope="selected", job_ids=unique_new_ids, limit=None, force_rescore=False)
+                score_jobs(
+                    score_config,
+                    scope="selected",
+                    job_ids=unique_new_ids,
+                    limit=None,
+                    force_rescore=False,
+                    recycle_filtered=True,
+                )
             except Exception as exc:
                 outcome = "completed_with_errors"
                 self._persist(states, unique_new_ids, "", error=f"自动评分失败：{str(exc)[:500]}")

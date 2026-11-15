@@ -417,6 +417,32 @@ export default function ConfigPage() {
                 if (v) updateConfig('profile.filter_unparsed_salary', false)
               }} />
             </div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="flex items-center justify-between rounded-xl border border-card-border bg-surface px-3 py-2">
+                <div>
+                  <label className="text-xs text-foreground">考虑外包岗位</label>
+                  <p className="mt-1 text-xs text-muted">关闭时预筛和 AI 评分排除确认外包</p>
+                </div>
+                <Switch aria-label="考虑外包岗位" checked={config.profile?.accept_outsourcing ?? false} onChange={v => updateConfig('profile.accept_outsourcing', v)} />
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-card-border bg-surface px-3 py-2">
+                <div>
+                  <label className="text-xs text-foreground">考虑劳务派遣岗位</label>
+                  <p className="mt-1 text-xs text-muted">关闭时排除劳务派遣/外派岗位</p>
+                </div>
+                <Switch aria-label="考虑劳务派遣岗位" checked={config.profile?.accept_labor_dispatch ?? false} onChange={v => updateConfig('profile.accept_labor_dispatch', v)} />
+              </div>
+              <div className="flex items-center justify-between rounded-xl border border-card-border bg-surface px-3 py-2">
+                <div>
+                  <label className="text-xs text-foreground">考虑驻场岗位</label>
+                  <p className="mt-1 text-xs text-muted">关闭时排除驻场岗位</p>
+                </div>
+                <Switch aria-label="考虑驻场岗位" checked={config.profile?.accept_onsite ?? false} onChange={v => updateConfig('profile.accept_onsite', v)} />
+              </div>
+            </div>
+            <p className="rounded-xl border border-card-border bg-surface px-3 py-2 text-xs leading-5 text-muted">
+              关闭的类型会在采集后的预筛和 AI 评分中被排除；如果“排除关键词”里仍保留同名词（如“外包”），排除词也会生效。
+            </p>
           </div>
         </SectionCard>
 

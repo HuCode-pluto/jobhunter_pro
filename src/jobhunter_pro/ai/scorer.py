@@ -57,17 +57,22 @@ SCORING_PROMPT = """你是一位严谨的招聘匹配评估员。请依据完整
 - 要求：{experience}
 - 学历要求：{education}
 - 招聘类型：{recruitment_type}
+- 外包识别：{outsourcing_evidence}
+- 岗位类型偏好：{type_preferences}
 - JD：{jd}
 
 ## 证据核对规则
 先核对JD的主要职责与明确必备条件，再在完整简历中寻找对应经历、行动和成果，包括工作、自主项目与社区实践；职位名称或行业名称不完全相同，不代表没有相关能力。
 - 区分“已证明满足”“有相邻证据”“未体现、待确认”“明确不满足”。没有写过某项经历只能说“未体现”，不能断言从未做过；已有相关经历时应说明具体方向的差距，不能否定整个行业或能力。
 - 可迁移能力必须有具体行动或成果支持，不能仅靠关键词加分；也不能因缺少完全同名岗位而忽略实际做过的工作。自主项目能支持职责与成果，不能凭空折算为全职任职年限。
-- JD中的“优先、加分、感兴趣”不是必备条件；不得从JD替候选人编造意愿、性格或薪资偏好。驻场、出差等意愿未写明时列为待确认，不视为拒绝。
+- JD中的“优先、加分、感兴趣”不是必备条件；不得从JD替候选人编造意愿、性格或薪资偏好。驻场、出差等仅表示工作方式，未明确属于不考虑的类型时不单独作为拒绝理由；明确属于不考虑的类型时按下方岗位类型排除规则处理。
 - 同一项缺口不要在多个维度重复扣分。未提出的条件不扣分；年限按JD要求的相关工作范围核对，不把总工作年限直接当成细分岗位年限。明确要求的经验、资格或现有资源未体现时，属于证据缺口，不能按已满足给满分。
 - 保留JD条件的完整范围与连接词：“A或B”满足任一即可；“A，C优先”不能把A也当成优先。行业经历与细分业务经验要分别核对，不因缺少某种业务经验就断言没有整个行业经历。
 - 行业与客户类型要查遍每段任职，不能只看最近的自主项目。按实际服务领域判断：保险属于金融领域，为企业或政府提供技术产品能支撑B/G端经验；这些不能自动证明信贷、基金销售等细分业务能力。描述差距时保留这种区别。
 - 给分后逐条核对理由：每个“缺少/没有/不满足”是否遗漏简历证据，或把可选条件、未知信息误写成硬伤。
+
+## 岗位类型排除规则
+候选人可以选择是否考虑外包、劳务派遣、驻场岗位，具体偏好见“岗位类型偏好”。若某类型标记为“不考虑”，且岗位信息或“外包识别”明确属于该类型，应直接判定为不匹配：最终评分不得高于20分，reason 写明类型；不要因“客户、现场、出差”等中性词误判。若标记为“考虑”，不得仅因该类型扣分。
 
 ## 统一评分维度
 逐项给分，不要自行输出总分；程序会统一求和：
@@ -209,6 +214,72 @@ def _salary_fit_summary(salary: str, salary_min: float, salary_max: float, salar
     return f"月薪交集为{_format_salary_k(overlap_low)}K-{_format_salary_k(overlap_high)}K，薪资范围匹配，不因区间端点不同扣分。"
 
 
+def _outsourcing_summary(job: dict) -> str:
+    """Render persisted outsourcing evidence for the scoring prompt."""
+    from jobhunter_pro.outsourcing import classify_outsourcing_signals
+
+    level = str(job.get("outsourcing_level") or "").strip().lower()
+    confirmed = job.get("outsourcing_confirmed")
+    if not level:
+        level = "confirmed" if confirmed in (1, True, "1", "true", "yes") else "clean"
+    matches: list[str] = []
+    for key in ("outsourcing_matches", "outsourcing_layers"):
+        raw = job.get(key)
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            data = []
+        if not isinstance(data, list):
+            continue
+        for item in data:
+            value = item.get("keyword") if isinstance(item, dict) else item
+            text = str(value or "").strip()
+            if text and text not in matches:
+                matches.append(text[:40])
+    categories = classify_outsourcing_signals(job)
+    category_labels = [
+        label
+        for key, label in (
+            ("outsourcing", "外包"),
+            ("labor_dispatch", "劳务派遣"),
+            ("onsite", "驻场"),
+        )
+        if categories[key]
+    ]
+    if level == "clean" and not category_labels:
+        return "未发现明确外包特征"
+    label = (
+        "已确认外包/人力派遣"
+        if level == "confirmed"
+        else "疑似外包信号"
+        if level == "suspected"
+        else "检测到岗位类型信号"
+    )
+    if category_labels:
+        label += f"；类型：{'、'.join(category_labels)}"
+    if matches:
+        return f"{label}（命中：{'、'.join(matches[:5])}）"
+    return label
+
+
+def _type_preferences_text(profile: dict) -> str:
+    def state(key: str) -> str:
+        value = profile.get(key, False)
+        if isinstance(value, str):
+            enabled = value.strip().lower() in {"1", "true", "yes", "on", "是"}
+        else:
+            enabled = bool(value)
+        return "考虑" if enabled else "不考虑"
+
+    return (
+        f"外包：{state('accept_outsourcing')}；"
+        f"劳务派遣：{state('accept_labor_dispatch')}；"
+        f"驻场：{state('accept_onsite')}"
+    )
+
+
 def _build_scoring_prompt(job: dict, resume: str, config: dict | None = None) -> str:
     config = config or {}
     profile = config.get("profile", {}) if isinstance(config.get("profile"), dict) else {}
@@ -242,6 +313,8 @@ def _build_scoring_prompt(job: dict, resume: str, config: dict | None = None) ->
         salary_max=_format_salary_k(salary_max),
         salary_ceil=_format_salary_k(salary_ceil),
         salary_fit=_salary_fit_summary(job.get("salary") or "", salary_min, salary_max, salary_ceil),
+        outsourcing_evidence=_outsourcing_summary(job),
+        type_preferences=_type_preferences_text(profile),
         jd=clean_job_description(job.get("jd", "")),
     )
 

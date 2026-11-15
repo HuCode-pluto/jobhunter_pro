@@ -4,6 +4,7 @@ import re
 from jobhunter_pro.employment import internship_rejection
 
 from jobhunter_pro.job_filters import matching_blocked_company, matching_deal_breaker
+from jobhunter_pro.outsourcing import classify_outsourcing_signals
 
 
 _INTERNSHIP_KEYWORDS = ("实习", "intern", "internship", "管培")
@@ -18,6 +19,13 @@ def quick_score(job: dict, config: dict) -> tuple[int, str]:
     if reason:
         return 0, reason
     profile = config.get("profile", {})
+    categories = classify_outsourcing_signals(job)
+    if not _as_bool(profile.get("accept_outsourcing", False)) and categories["outsourcing"]:
+        return 0, f"外包岗位（命中：{'、'.join(categories['outsourcing'][:3])}）"
+    if not _as_bool(profile.get("accept_labor_dispatch", False)) and categories["labor_dispatch"]:
+        return 0, f"劳务派遣岗位（命中：{'、'.join(categories['labor_dispatch'][:3])}）"
+    if not _as_bool(profile.get("accept_onsite", False)) and categories["onsite"]:
+        return 0, f"驻场岗位（命中：{'、'.join(categories['onsite'][:3])}）"
     deal_breakers = profile.get("deal_breakers", [])
     jd_deal_breakers = profile.get("jd_deal_breakers", [])
     blocked_companies = profile.get("blocked_companies", [])

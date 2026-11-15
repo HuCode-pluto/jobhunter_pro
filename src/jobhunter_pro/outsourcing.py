@@ -308,6 +308,80 @@ def detect_outsourcing_signals(job: dict, deal_breakers: list[str] | None = None
     }
 
 
+_DISPATCH_CATEGORY_HINTS = ("劳务派遣", "派遣", "人力外派", "外派")
+_ONSITE_CATEGORY_HINTS = ("驻场", "驻点", "现场办公", "客户现场", "现场服务", "驻场补贴")
+_OUTSOURCING_CATEGORY_HINTS = (
+    "外包", "人力外包", "IT外包", "人力资源外包", "人力服务", "人力咨询", "人力资本",
+)
+
+
+def classify_outsourcing_signals(job: dict) -> dict[str, list[str]]:
+    """Split outsourcing evidence into outsourcing / labor dispatch / onsite buckets."""
+    categories: dict[str, list[str]] = {
+        "outsourcing": [],
+        "labor_dispatch": [],
+        "onsite": [],
+    }
+
+    def add(category: str, value: object) -> None:
+        text = str(value or "").strip()
+        if text and text not in categories[category]:
+            categories[category].append(text)
+
+    def classify(text: str, layer: str | None = None) -> str | None:
+        lower = text.lower()
+        if layer == "L0":
+            return "outsourcing"
+        if any(hint.lower() in lower for hint in _DISPATCH_CATEGORY_HINTS):
+            return "labor_dispatch"
+        if any(hint.lower() in lower for hint in _ONSITE_CATEGORY_HINTS):
+            return "onsite"
+        if any(hint.lower() in lower for hint in _OUTSOURCING_CATEGORY_HINTS) or layer == "L1":
+            return "outsourcing"
+        return None
+
+    for raw in (job.get("outsourcing_matches"), job.get("outsourcing_layers")):
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw) if isinstance(raw, str) else raw
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(data, list):
+            continue
+        for item in data:
+            layer = item.get("layer") if isinstance(item, dict) else None
+            keyword = item.get("keyword") if isinstance(item, dict) else item
+            category = classify(str(keyword or ""), str(layer or ""))
+            if category:
+                add(category, keyword)
+
+    # Fallback for jobs whose detector columns are missing or were computed
+    # with rules disabled: still honor explicit category keywords.
+    for field in _SCAN_FIELDS:
+        value = str(job.get(field) or "")
+        if not value:
+            continue
+        lowered = value.lower()
+        for hint in _OUTSOURCING_CATEGORY_HINTS:
+            if hint.lower() in lowered:
+                add("outsourcing", hint)
+        for hint in _DISPATCH_CATEGORY_HINTS:
+            if hint.lower() in lowered:
+                add("labor_dispatch", hint)
+        for hint in _ONSITE_CATEGORY_HINTS:
+            if hint.lower() in lowered:
+                add("onsite", hint)
+
+    if not any(categories.values()):
+        level = str(job.get("outsourcing_level") or "").strip().lower()
+        confirmed = job.get("outsourcing_confirmed")
+        if level == "confirmed" or confirmed in (1, True, "1", "true", "yes"):
+            add("outsourcing", "已确认外包特征")
+
+    return categories
+
+
 # ---------------------------------------------------------------------------
 # v1.9 multi-layer outsourcing detection
 # ---------------------------------------------------------------------------
